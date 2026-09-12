@@ -109,6 +109,18 @@
     aspect-ratio:4/3;overflow:hidden;
   }
   .frame-box canvas,.frame-box img{width:100%;height:100%;object-fit:cover;display:block;}
+  .frame-box .hero-slide{position:absolute;inset:0;opacity:0;transition:opacity .7s ease;}
+  .frame-box .hero-slide.active{opacity:1;}
+  .frame-box .hero-dots{
+    position:absolute;left:0;right:0;bottom:14px;z-index:3;
+    display:flex;justify-content:center;gap:8px;
+  }
+  .hero-dot{
+    width:7px;height:7px;border-radius:50%;padding:0;border:1px solid rgba(23,20,15,0.5);
+    background:rgba(239,231,216,0.45);cursor:pointer;transition:background .2s ease, transform .2s ease;
+  }
+  .hero-dot:hover{background:rgba(239,231,216,0.75);}
+  .hero-dot.active{background:var(--brass-bright);transform:scale(1.35);}
   .frame-tag{
     position:absolute;top:12px;left:12px;font-family:var(--font-mono);font-size:11px;
     letter-spacing:0.08em;color:var(--paper);background:rgba(23,20,15,0.55);
@@ -646,23 +658,73 @@
     }
   });
 
-  /* ---------- hero: feature the first available real photo ---------- */
+  /* ---------- hero: carousel through every photo marked "首頁精選" ---------- */
   var heroFrameBox = document.getElementById('hero-frame-box');
   var heroCaption = document.getElementById('hero-caption');
-  var heroPick = null;
-  for (var hi=0; hi<CATEGORIES.length && !heroPick; hi++){
-    for (var hj=0; hj<CATEGORIES[hi].photos.length; hj++){
-      if (CATEGORIES[hi].photos[hj].isFeatured){ heroPick = {cat:CATEGORIES[hi], photo:CATEGORIES[hi].photos[hj]}; break; }
-    }
-  }
-  if (!heroPick){
+  var heroSlides = [];
+  CATEGORIES.forEach(function(cat){
+    cat.photos.forEach(function(photo){
+      if (photo.isFeatured) heroSlides.push({cat:cat, photo:photo});
+    });
+  });
+  if (!heroSlides.length){
     for (var hk=0; hk<CATEGORIES.length; hk++){
-      if (CATEGORIES[hk].photos.length){ heroPick = {cat:CATEGORIES[hk], photo:CATEGORIES[hk].photos[0]}; break; }
+      if (CATEGORIES[hk].photos.length){ heroSlides.push({cat:CATEGORIES[hk], photo:CATEGORIES[hk].photos[0]}); break; }
     }
   }
-  if (heroPick){
-    heroFrameBox.innerHTML = '<img src="'+heroPick.photo.file+'" alt="'+heroPick.cat.zh+'"><span class="frame-tag">MASTER ROLL</span>';
-    heroCaption.innerHTML = '<span>'+heroPick.photo.lens+'mm · f/'+heroPick.photo.aperture+' · '+heroPick.photo.shutter+'s</span><span>ISO '+heroPick.photo.iso+' — '+heroPick.photo.date+'</span>';
+
+  function heroCaptionHtml(photo){
+    return '<span>'+photo.lens+'mm · f/'+photo.aperture+' · '+photo.shutter+'s</span><span>ISO '+photo.iso+' — '+photo.date+'</span>';
+  }
+
+  if (heroSlides.length){
+    var slideHtml = heroSlides.map(function(s, i){
+      return '<img class="hero-slide'+(i===0?' active':'')+'" src="'+s.photo.file+'" alt="'+s.cat.zh+'">';
+    }).join('');
+    heroFrameBox.innerHTML = slideHtml + '<span class="frame-tag">MASTER ROLL</span>' +
+      (heroSlides.length > 1 ? '<div class="hero-dots" id="hero-dots"></div>' : '');
+    heroCaption.innerHTML = heroCaptionHtml(heroSlides[0].photo);
+
+    if (heroSlides.length > 1){
+      var dotsEl = document.getElementById('hero-dots');
+      var slideEls = heroFrameBox.querySelectorAll('.hero-slide');
+      var dotEls = [];
+      heroSlides.forEach(function(s, i){
+        var dot = document.createElement('button');
+        dot.className = 'hero-dot' + (i===0 ? ' active' : '');
+        dot.setAttribute('aria-label', '第 '+(i+1)+' 張精選照');
+        dotsEl.appendChild(dot);
+        dotEls.push(dot);
+      });
+      var heroIndex = 0;
+      var heroTimer = null;
+      var prefersReducedMotionHero = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function showHeroSlide(i){
+        heroIndex = i;
+        slideEls.forEach(function(el, idx){ el.classList.toggle('active', idx===i); });
+        dotEls.forEach(function(el, idx){ el.classList.toggle('active', idx===i); });
+        heroCaption.innerHTML = heroCaptionHtml(heroSlides[i].photo);
+      }
+      function nextHeroSlide(){ showHeroSlide((heroIndex+1) % heroSlides.length); }
+      function stopHeroAutoplay(){
+        if (heroTimer){ clearInterval(heroTimer); heroTimer = null; }
+      }
+      function startHeroAutoplay(){
+        if (prefersReducedMotionHero) return;
+        stopHeroAutoplay();
+        heroTimer = setInterval(nextHeroSlide, 4500);
+      }
+      dotEls.forEach(function(dot, i){
+        dot.addEventListener('click', function(){
+          showHeroSlide(i);
+          startHeroAutoplay();
+        });
+      });
+      heroFrameBox.addEventListener('mouseenter', stopHeroAutoplay);
+      heroFrameBox.addEventListener('mouseleave', startHeroAutoplay);
+      startHeroAutoplay();
+    }
   } else {
     heroFrameBox.innerHTML = '<canvas id="hero-canvas" width="1400" height="1050"></canvas><span class="frame-tag">MASTER ROLL</span>';
     heroCaption.innerHTML = '<span>85mm · f/1.8 · 1/320s</span><span>ISO 400 — 2026.01</span>';
