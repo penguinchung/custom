@@ -485,123 +485,7 @@
     ctx.globalAlpha = 1;
   }
 
-  /* ---------- content model (synced from the admin backend) ---------- */
-  var CATEGORIES = [
-    {
-      id:'wedding', zh:'婚禮', en:'Weddings', tintHex:'#b98577',
-      tagline:'從迎娶到晚宴,記錄真實流動的情感瞬間。',
-      filters:['全部','晚宴','婚紗'],
-      photos:[
-        { file:'photos/wedding/7lwb76pquv6vs358febx.jpg', tag:'晚宴', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:true, isFeatured:false },
-        { file:'photos/wedding/v9ly4nyz0ew8i5pxbp8u.jpg', tag:'晚宴', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/wedding/5xgovfu4zb71g8vsvpeq.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/wedding/1a522b1208ef2ijydn4j.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/wedding/n9ht5w1bk99ibom1p9hv.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/wedding/91534pk19hah4ttfn7t2.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/wedding/roqt74s5et0cfj3pw91z.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/wedding/603y1ozkb16s9ihk2b50.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/wedding/m2zkgvvfq8k43rn4gq04.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/wedding/bpanzdsu924bqpq0pip0.jpg', tag:'婚紗', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/wedding/lt0x45yqxb12hvptaqtu.jpg', tag:'晚宴', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true }
-      ]
-    },
-    {
-      id:'cmty0ir1kayci', zh:'日本自助婚紗', en:'', tintHex:'#a68a5b',
-      tagline:'跨海取景,在異地光線裡留下兩人剛剛好的自由感。',
-      filters:['全部','戶外'],
-      photos:[
-        { file:'photos/cmty0ir1kayci/eesty7ffi4nysra1hlc3.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:true, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/jrvrmbxizw1624bsjojt.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/i68u28dx6xhm5v7tc6cz.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/yt605ttpf5y8aqyk597c.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/5gdmkjazkcyp7blw8lf7.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/s3j2to4wy2hzzql3spym.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/7znfx632kf4khjx9ln33.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/yaupt21y58d9rf7lrydi.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/jd28j7kgu8f5zdk8ffni.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/828ter44ej3jyfillk46.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/ii01qq9e1s9i0jeydxgo.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/l1wiioun60nkijca7wvn.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/e6cenhjdvodt9jrr4emd.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/wevclglxjemhy5h3xrit.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/1n9d29mffua7rzggqz1o.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/49emce3xv5o5c27xr8fl.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/mnded0hmenqoiwo3of4i.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/pmj8q7ckohbfa0qq90jt.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/718h0k54c4k792rmy349.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/mie36g1i20gtmnbgcmwk.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/sx15bw9b307ngsvnovv7.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/dpuj703f6rwq3b3iy3l0.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/7rwp6utfa6l8vdfrlmt7.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/0ir4al3fbo93bn7qwu2k.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/a75u9v7pz2wiks3u1au5.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/h8mkng1mr067zuqy2z2b.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/9sl422l18kva4a67ccg9.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/5ds3d32i3vzyrrmq4nzu.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/ujovy0nc6msm9q6zgzpw.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/ypifs9atdi416t45987z.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/erjf1n4zvunvecd567n8.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/7iahg7eib881slf263bf.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/j5zqgqase0mhy4cfjuwu.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/db0sh14lruazf6t6g1tp.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/k387q2ooqfms49wimr1g.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/mwf06kt1guj5ok6066s5.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/tt8xg20v5j2lyt4erlzr.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/0hrv7qbuub8sqa6d8q5n.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/7j7nxagc34pqd34t5k1g.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/ljm6j79j7ec70rbqgv4z.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/nc9vyiwatxoklk1w1nfi.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/wqm0e3h1njpepxsi51lh.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/2m2jgwdepo930if0ju9t.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/et8u28dynve9dsw2sfj9.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/d9qplu9kgq0u42t0arbh.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/rkhvtftz2ea3rtswccpi.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/5kvbqf30folp44qyikat.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/ze9epufsaawu0t6wwr6i.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/1v6ri54gf23gpar2p2uq.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/3l6mi8d9un0zre1g3h8e.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/r5fdvu5dyz32nf21p4fx.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false },
-        { file:'photos/cmty0ir1kayci/5ve159by41rgwzhj6wl2.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:true },
-        { file:'photos/cmty0ir1kayci/f7fb0oetmp5kn9eehk0n.jpg', tag:'戶外', lens:50, aperture:2.8, shutter:'1/200', iso:400, place:'', date:'2026.09', mono:false, isCover:false, isFeatured:false }
-      ]
-    },
-    {
-      id:'landscape', zh:'風景', en:'Landscapes', tintHex:'#7c8d68',
-      tagline:'山岳、海岸與城市天際線,追逐光線變化的當下。',
-      filters:['全部'],
-      photos:[]
-    },
-    {
-      id:'portrait', zh:'人像', en:'Portraits', tintHex:'#b99878',
-      tagline:'自然光與棚燈之間,捕捉最放鬆的表情。',
-      filters:['全部'],
-      photos:[]
-    },
-    {
-      id:'street', zh:'街拍', en:'Street', tintHex:'#9a9d95',
-      tagline:'城市紋理與人文瞬間,黑白與色彩並存的觀察。',
-      filters:['全部'],
-      photos:[]
-    },
-    {
-      id:'commercial', zh:'商業', en:'Commercial', tintHex:'#7c8fa0',
-      tagline:'產品、空間與品牌形象,精準而乾淨的商業視角。',
-      filters:['全部'],
-      photos:[]
-    },
-    {
-      id:'event', zh:'活動紀錄', en:'Events', tintHex:'#8d7596',
-      tagline:'演唱會到企業活動,記錄現場能量與細節。',
-      filters:['全部'],
-      photos:[]
-    },
-    {
-      id:'cmty0j7fzvvhn', zh:'寵物寫真', en:'', tintHex:'#5c8a82',
-      tagline:'捕捉毛孩最放鬆的姿態,留住牠們日常裡最真實的表情。',
-      filters:['全部'],
-      photos:[]
-    }
-  ];
+  function renderSite(CATEGORIES){
 
   /* ---------- home: category grid ---------- */
   var grid = document.getElementById('cat-grid');
@@ -911,6 +795,40 @@
       stepLightbox(dx < 0 ? 1 : -1);
     }
   }, {passive:true});
+
+  } /* end renderSite */
+
+  /* ---------- load content from data/*.json (editable via /admin CMS) ---------- */
+  Promise.all([
+    fetch('data/categories.json').then(function(r){ return r.json(); }),
+    fetch('data/photos.json').then(function(r){ return r.json(); })
+  ]).then(function(results){
+    var catData = results[0].categories || [];
+    var photoData = results[1].photos || [];
+    var catsById = {};
+    var CATEGORIES = catData.slice().sort(function(a,b){ return a.order - b.order; }).map(function(c){
+      var cat = { id:c.id, zh:c.zh, en:c.en, tagline:c.tagline, tintHex:c.tintHex, photos:[] };
+      catsById[c.id] = cat;
+      return cat;
+    });
+    photoData.forEach(function(p){
+      var cat = catsById[p.category];
+      if (cat) cat.photos.push(p);
+    });
+    CATEGORIES.forEach(function(cat){
+      cat.photos.sort(function(a,b){ return a.order - b.order; });
+      var seen = {}, tags = [];
+      cat.photos.forEach(function(p){
+        if (p.tag && !seen[p.tag]){ seen[p.tag] = true; tags.push(p.tag); }
+      });
+      cat.filters = ['全部'].concat(tags);
+    });
+    renderSite(CATEGORIES);
+  }).catch(function(err){
+    var grid = document.getElementById('cat-grid');
+    if (grid) grid.innerHTML = '<p style="color:var(--paper-dim);padding:20px 0;">內容載入失敗,請重新整理頁面再試一次。</p>';
+    console.error('Failed to load site content:', err);
+  });
 
 })();
 </script>
