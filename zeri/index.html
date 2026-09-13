@@ -126,7 +126,7 @@
     letter-spacing:0.08em;color:var(--paper);background:rgba(23,20,15,0.55);
     padding:4px 9px;border:1px solid var(--line-strong);
   }
-  #works, #about, #contact{scroll-margin-top:88px;}
+  #works, #feedback, #about, #contact{scroll-margin-top:88px;}
 
   /* ---------- works / category grid ---------- */
   .works{padding:70px 0 90px;border-top:1px solid var(--line);}
@@ -169,6 +169,24 @@
   }
   .cat-body .meta .bar{width:0;height:1px;background:var(--brass);transition:width .4s ease;}
   .cat-tile a:hover .meta .bar{width:26px;}
+
+  /* ---------- client feedback ---------- */
+  .feedback{padding:70px 0 90px;border-top:1px solid var(--line);}
+  .feedback-list{display:flex;flex-direction:column;gap:26px;max-width:720px;margin:0 auto;}
+  .feedback-row{display:flex;flex-direction:column;max-width:78%;}
+  .feedback-row.left{align-self:flex-start;align-items:flex-start;}
+  .feedback-row.right{align-self:flex-end;align-items:flex-end;}
+  .feedback-bubble{
+    position:relative;padding:20px 22px;border:1px solid var(--line-strong);
+    background:var(--surface);border-radius:16px 16px 16px 4px;
+  }
+  .feedback-row.right .feedback-bubble{background:var(--surface-2);border-radius:16px 16px 4px 16px;}
+  .feedback-bubble p{font-family:var(--font-display);font-style:italic;font-size:16px;line-height:1.65;color:var(--paper);margin:0;text-wrap:balance;}
+  .feedback-byline{margin-top:10px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.06em;color:var(--paper-faint);}
+  .feedback-byline .name{color:var(--brass-bright);}
+  @media(max-width:640px){
+    .feedback-row{max-width:92%;}
+  }
 
   /* ---------- about ---------- */
   .about{padding:80px 0;border-top:1px solid var(--line);}
@@ -336,6 +354,17 @@
       </div>
     </section>
 
+    <section class="feedback" id="feedback">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Client Words · 顧客回饋</span>
+          <h2>他們是這樣說的。</h2>
+          <p>來自曾經合作過的新人與客戶,最真實的回饋。</p>
+        </div>
+        <div class="feedback-list" id="feedback-list"></div>
+      </div>
+    </section>
+
     <section class="about" id="about">
       <div class="wrap">
         <div class="about-text">
@@ -485,8 +514,19 @@
     ctx.globalAlpha = 1;
   }
 
-  function renderSite(CATEGORIES){
+  function renderFeedback(TESTIMONIALS){
+    var feedbackList = document.getElementById('feedback-list');
+    TESTIMONIALS.forEach(function(t, i){
+      var row = document.createElement('div');
+      row.className = 'feedback-row ' + (i % 2 === 0 ? 'left' : 'right');
+      row.innerHTML =
+        '<div class="feedback-bubble"><p>' + t.quote + '</p></div>' +
+        '<div class="feedback-byline"><span class="name">' + t.name + '</span>' + (t.tag ? ' · ' + t.tag : '') + '</div>';
+      feedbackList.appendChild(row);
+    });
+  }
 
+  function renderSite(CATEGORIES){
   /* ---------- home: category grid ---------- */
   var grid = document.getElementById('cat-grid');
   CATEGORIES.forEach(function(cat, idx){
@@ -694,7 +734,7 @@
     var m = hash.match(/^#\/c\/([a-z0-9]+)/i);
     if (m){ showCategory(m[1]); return; }
     showHome();
-    var anchor = hash.match(/^#(works|about|contact)$/);
+    var anchor = hash.match(/^#(works|feedback|about|contact)$/);
     if (anchor){
       requestAnimationFrame(function(){
         var el = document.getElementById(anchor[1]);
@@ -801,10 +841,12 @@
   /* ---------- load content from data/*.json (editable via /admin CMS) ---------- */
   Promise.all([
     fetch('data/categories.json').then(function(r){ return r.json(); }),
-    fetch('data/photos.json').then(function(r){ return r.json(); })
+    fetch('data/photos.json').then(function(r){ return r.json(); }),
+    fetch('data/testimonials.json').then(function(r){ return r.json(); })
   ]).then(function(results){
     var catData = results[0].categories || [];
     var photoData = results[1].photos || [];
+    var testimonialData = (results[2].testimonials || []).slice().sort(function(a,b){ return a.order - b.order; });
     var catsById = {};
     var CATEGORIES = catData.slice().sort(function(a,b){ return a.order - b.order; }).map(function(c){
       var cat = { id:c.id, zh:c.zh, en:c.en, tagline:c.tagline, tintHex:c.tintHex, photos:[] };
@@ -823,6 +865,7 @@
       });
       cat.filters = ['全部'].concat(tags);
     });
+    renderFeedback(testimonialData);
     renderSite(CATEGORIES);
   }).catch(function(err){
     var grid = document.getElementById('cat-grid');
