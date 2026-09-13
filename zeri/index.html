@@ -126,12 +126,6 @@
     letter-spacing:0.08em;color:var(--paper);background:rgba(23,20,15,0.55);
     padding:4px 9px;border:1px solid var(--line-strong);
   }
-  .frame-caption{
-    display:flex;justify-content:space-between;align-items:baseline;
-    font-family:var(--font-mono);font-size:11px;color:var(--paper-faint);
-    padding-top:10px;letter-spacing:0.04em;
-  }
-
   #works, #about, #contact{scroll-margin-top:88px;}
 
   /* ---------- works / category grid ---------- */
@@ -247,14 +241,6 @@
     position:absolute;top:10px;left:10px;font-family:var(--font-mono);font-size:10px;
     color:var(--paper);background:rgba(23,20,15,0.55);padding:3px 7px;border:1px solid var(--line-strong);
   }
-  .frame .frame-info{
-    position:absolute;left:0;right:0;bottom:0;padding:10px 12px;
-    background:linear-gradient(to top, rgba(23,20,15,0.9), rgba(23,20,15,0));
-    font-family:var(--font-mono);font-size:10.5px;color:var(--paper-dim);
-    opacity:0;transform:translateY(4px);transition:opacity .25s ease, transform .25s ease;
-    text-align:left;letter-spacing:0.02em;
-  }
-  .frame:hover .frame-info{opacity:1;transform:translateY(0);}
 
   .empty-state{padding:50px 0 100px;}
   .empty-state p{color:var(--paper-dim);font-size:14.5px;margin-bottom:22px;}
@@ -277,7 +263,7 @@
   }
   .lb-image-wrap img{max-height:70vh;width:auto;height:auto;max-width:100%;display:block;}
   .lb-bottom{
-    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;
+    display:flex;justify-content:flex-end;align-items:center;flex-wrap:wrap;gap:12px;
     font-family:var(--font-mono);font-size:12px;color:var(--paper-dim);
     border-top:1px solid var(--line);padding-top:14px;letter-spacing:0.03em;
   }
@@ -335,7 +321,6 @@
         <div class="hero-frame fade-in">
           <span class="sprocket"></span>
           <div class="frame-box" id="hero-frame-box"></div>
-          <div class="frame-caption" id="hero-caption"></div>
         </div>
       </div>
     </section>
@@ -407,7 +392,6 @@
     <button class="lb-nav" id="lb-next" aria-label="下一張">&rsaquo;</button>
   </div>
   <div class="lb-bottom">
-    <span id="lb-exif"></span>
     <span class="lb-tag" id="lb-tag"></span>
   </div>
 </div>
@@ -619,11 +603,6 @@
     }
   ];
 
-  function formatExif(photo){
-    var base = photo.lens+'mm · f/'+photo.aperture+' · '+photo.shutter+'s · ISO '+photo.iso;
-    return base + (photo.place ? ' — '+photo.place+', '+photo.date : ' — '+photo.date);
-  }
-
   /* ---------- home: category grid ---------- */
   var grid = document.getElementById('cat-grid');
   CATEGORIES.forEach(function(cat, idx){
@@ -660,7 +639,6 @@
 
   /* ---------- hero: carousel through every photo marked "首頁精選" ---------- */
   var heroFrameBox = document.getElementById('hero-frame-box');
-  var heroCaption = document.getElementById('hero-caption');
   var heroSlides = [];
   CATEGORIES.forEach(function(cat){
     cat.photos.forEach(function(photo){
@@ -673,17 +651,12 @@
     }
   }
 
-  function heroCaptionHtml(photo){
-    return '<span>'+photo.lens+'mm · f/'+photo.aperture+' · '+photo.shutter+'s</span><span>ISO '+photo.iso+' — '+photo.date+'</span>';
-  }
-
   if (heroSlides.length){
     var slideHtml = heroSlides.map(function(s, i){
       return '<img class="hero-slide'+(i===0?' active':'')+'" src="'+s.photo.file+'" alt="'+s.cat.zh+'">';
     }).join('');
     heroFrameBox.innerHTML = slideHtml + '<span class="frame-tag">MASTER ROLL</span>' +
       (heroSlides.length > 1 ? '<div class="hero-dots" id="hero-dots"></div>' : '');
-    heroCaption.innerHTML = heroCaptionHtml(heroSlides[0].photo);
 
     if (heroSlides.length > 1){
       var dotsEl = document.getElementById('hero-dots');
@@ -704,7 +677,6 @@
         heroIndex = i;
         slideEls.forEach(function(el, idx){ el.classList.toggle('active', idx===i); });
         dotEls.forEach(function(el, idx){ el.classList.toggle('active', idx===i); });
-        heroCaption.innerHTML = heroCaptionHtml(heroSlides[i].photo);
       }
       function nextHeroSlide(){ showHeroSlide((heroIndex+1) % heroSlides.length); }
       function stopHeroAutoplay(){
@@ -727,7 +699,6 @@
     }
   } else {
     heroFrameBox.innerHTML = '<canvas id="hero-canvas" width="1400" height="1050"></canvas><span class="frame-tag">MASTER ROLL</span>';
-    heroCaption.innerHTML = '<span>85mm · f/1.8 · 1/320s</span><span>ISO 400 — 2026.01</span>';
     requestAnimationFrame(function(){ paintFrame(document.getElementById('hero-canvas'), 'hero-master', '#b4915b'); });
   }
 
@@ -792,7 +763,6 @@
         '<button data-idx="'+i+'">' +
           '<img src="'+photo.file+'" alt="'+cat.zh+' '+photo.tag+'" loading="lazy">' +
           '<span class="frame-no">No. '+String(i+1).padStart(3,'0')+'</span>' +
-          '<span class="frame-info">'+formatExif(photo)+'</span>' +
         '</button>';
       gallery.appendChild(fig);
       fig.querySelector('button').addEventListener('click', function(){
@@ -856,7 +826,6 @@
   var lbImageWrap = document.querySelector('.lb-image-wrap');
   var lbImage = document.getElementById('lb-image');
   var lbCounter = document.getElementById('lb-counter');
-  var lbExif = document.getElementById('lb-exif');
   var lbTag = document.getElementById('lb-tag');
   var lbState = { cat:null, photos:[], index:0 };
   var lbAnimating = false;
@@ -870,7 +839,6 @@
     lbImage.src = photo.file;
     lbImage.alt = cat.zh + ' ' + photo.tag;
     lbCounter.textContent = String(i+1).padStart(3,'0') + ' / ' + String(photos.length).padStart(3,'0');
-    lbExif.textContent = formatExif(photo);
     lbTag.textContent = photo.tag;
   }
 
