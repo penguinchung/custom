@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>庫存進銷系統｜帳目表</title>
+<title>商品型錄</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- ===== Firebase（買家自己的專案）=====================================
@@ -317,9 +317,29 @@
     .store-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px;}
     header.top{flex-direction:column;}
   }
+
+  /* ---------- 開機中：資料還沒載入前，不要露出任何管理畫面 ---------- */
+  .boot-loading{display:none;}
+  body.booting .boot-loading{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:80px 0; color:var(--ink-soft); font-size:14px;
+  }
+  .boot-loading .dot{
+    width:9px; height:9px; border-radius:50%; background:var(--primary); opacity:.35;
+    animation:bootPulse 1s ease-in-out infinite;
+  }
+  .boot-loading .dot:nth-child(2){animation-delay:.15s;}
+  .boot-loading .dot:nth-child(3){animation-delay:.3s;}
+  @keyframes bootPulse{0%,100%{opacity:.25; transform:scale(.85);} 50%{opacity:1; transform:scale(1);}}
+  body.booting .view, body.booting #mainTabs, body.booting footer.note .foot-owner-note{display:none !important;}
+  @media (prefers-reduced-motion:reduce){ .boot-loading .dot{animation:none; opacity:.6;} }
 </style>
 </head>
-<body>
+<body class="booting">
+<script>
+  /* 保險：就算主程式因為網路或錯誤沒跑完，10 秒後也一定把畫面放出來 */
+  setTimeout(function(){ document.body.classList.remove("booting"); }, 10000);
+</script>
 <div class="app">
 
   <header class="top">
@@ -333,10 +353,10 @@
       </div>
       <div>
         <h1 style="font-size:19px; margin:0; letter-spacing:-0.01em;">
-          <span id="storeNameEditable" contenteditable="true" spellcheck="false">您的商店</span>
+          <span id="storeNameEditable" contenteditable="false" spellcheck="false">您的商店</span>
           <span style="font-weight:600;" id="brandSuffix"> 商品型錄</span>
         </h1>
-        <p id="brandHint">點一下店名即可直接修改文字</p>
+        <p id="brandHint" style="display:none;">點一下店名即可直接修改文字</p>
       </div>
     </div>
     <div class="toolbar rolebar">
@@ -354,6 +374,10 @@
     </div>
   </header>
 
+  <div class="boot-loading" id="bootLoading" role="status" aria-live="polite">
+    <span class="dot"></span><span class="dot"></span><span class="dot"></span><span>載入商品中…</span>
+  </div>
+
   <nav class="tabs" id="mainTabs" style="display:none;">
     <button class="tab-btn" data-view="store">店面預覽</button>
     <button class="tab-btn active" data-view="dashboard">儀表板</button>
@@ -369,7 +393,7 @@
   </nav>
 
   <!-- STOREFRONT (customer-facing) -->
-  <section class="view" id="view-store">
+  <section class="view active" id="view-store">
     <div class="store-hero">
       <h2><span id="heroTitle" contenteditable="false" spellcheck="false"></span></h2>
       <p><span id="heroSubtitle" contenteditable="false" spellcheck="false"></span></p>
@@ -514,7 +538,7 @@
   </section>
 
   <!-- DASHBOARD -->
-  <section class="view active" id="view-dashboard">
+  <section class="view" id="view-dashboard">
     <div class="cards" style="margin-bottom:14px;">
       <div class="card"><div class="label">商品總數</div><div class="value" id="statTotal">0</div></div>
       <div class="card warn"><div class="label">低庫存品項</div><div class="value" id="statLow">0</div></div>
@@ -1146,7 +1170,7 @@
   </section>
 
   <footer class="note">
-    資料儲存在目前瀏覽器分頁中，離開前請使用「匯出資料」保存，下次用「匯入資料」還原。
+    <span class="foot-owner-note" id="footOwnerNote" style="display:none;">資料儲存在雲端／目前瀏覽器中，離開前建議用「匯出資料」留一份備份，需要時用「匯入資料」還原。</span>
     <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--border); line-height:1.7;">
       版權所有 © 2026 penguin___chung<br>
       IG @penguin___chung<br>
@@ -1763,7 +1787,8 @@
        orders/*      每筆訂單一份；客人可新增、老闆即時收到
      沒設定 config、或 SDK 載入失敗 → FB.enabled = false，整個系統照單機跑。
      ===================================================================== */
-  const FB = { enabled:false, db:null, auth:null, authUser:null, isOwner:false, firstRun:false, _saveTimer:null, _ordersUnsub:null };
+  const FB = { enabled:false, db:null, auth:null, authUser:null, isOwner:false, firstRun:false, _saveTimer:null, _ordersUnsub:null,
+               _authResolved:false, _pub:null, _appliedStamp:null };
 
   function fbInit(){
     const c = window.FIREBASE_CONFIG;
@@ -1868,6 +1893,32 @@
   async function fbLoadDoc(path){
     try{ const s = await FB.db.doc(path).get(); return s.exists ? s.data() : null; }
     catch(e){ console.error("[Firebase] 讀取失敗 " + path + "：", e); return null; }
+  }
+
+  /* ---- 開機畫面 / 店面快取：避免客人先看到記帳畫面、或空白等很久 ---- */
+  function finishBoot(){ document.body.classList.remove("booting"); }
+
+  const PUBLIC_CACHE_KEY = "inv-public-cache";
+  function readPublicCache(){
+    try{ const raw = localStorage.getItem(PUBLIC_CACHE_KEY); return raw ? JSON.parse(raw) : null; }
+    catch(e){ return null; }
+  }
+  function writePublicCache(pub){
+    try{ localStorage.setItem(PUBLIC_CACHE_KEY, JSON.stringify(pub)); }
+    catch(e){ try{ localStorage.removeItem(PUBLIC_CACHE_KEY); }catch(e2){} } // 容量不夠就不快取（含大量內嵌照片時）
+  }
+  /* 把公開店面資料套進 state（客人視角） */
+  function usePublicDoc(pub){
+    state = stateFromPublicDoc(pub);
+    migrateStorefront(state);
+    applyTheme(state.theme);
+    FB._appliedStamp = pub.updatedAt || null;
+  }
+  function refreshPublicView(pub){
+    usePublicDoc(pub);
+    document.getElementById("storeNameEditable").textContent = state.storeName;
+    renderAll();
+    applyAccessUI();
   }
 
   function fbQueueSave(){
@@ -1988,6 +2039,10 @@
 
     document.getElementById("brandSuffix").textContent = owner ? " 庫存進銷系統｜帳目表" : " 商品型錄";
     document.getElementById("brandHint").style.display = owner ? "block" : "none";
+    // 瀏覽器分頁標題：客人看到的是「店名 商品型錄」，不是記帳系統名稱
+    document.title = ((state && state.storeName) || "商店") + (owner ? " 庫存進銷系統｜帳目表" : " 商品型錄");
+    const fon = document.getElementById("footOwnerNote");
+    if(fon) fon.style.display = owner ? "inline" : "none";
 
     const nameEl = document.getElementById("storeNameEditable");
     nameEl.setAttribute("contenteditable", owner ? "true" : "false");
@@ -5086,14 +5141,27 @@
     fbInit(); // 設定 FB.enabled
 
     if(FB.enabled){
-      const pub = await fbLoadDoc("shop/public");
-      if(pub && pub.products){
-        state = stateFromPublicDoc(pub);
-        migrateStorefront(state);
-        applyTheme(state.theme);
+      // 有上次的店面快取 → 直接秒開；同時在背景抓最新的，有變才更新畫面
+      const cached = readPublicCache();
+      const fetchFresh = fbLoadDoc("shop/public").then(pub => {
+        if(pub && pub.products){
+          FB._pub = pub;
+          writePublicCache(pub);
+          if(FB._authResolved && !FB.isOwner && pub.updatedAt !== FB._appliedStamp) refreshPublicView(pub);
+        }
+        return pub;
+      });
+      if(cached && cached.products){
+        FB._pub = cached;
+        usePublicDoc(cached);
       } else {
-        // 雲端還沒資料 → 先用本機/範例，等老闆登入後上傳
-        await loadLocalInto();
+        const pub = await fetchFresh;
+        if(pub && pub.products){
+          usePublicDoc(pub);
+        } else {
+          // 雲端還沒資料 → 先用本機/範例，等老闆登入後上傳
+          await loadLocalInto();
+        }
       }
     } else {
       await loadLocalInto();
@@ -5106,6 +5174,7 @@
     renderAll();
     applyAccessUI();
     switchView(isOwner() ? "dashboard" : "store");
+    if(!FB.enabled) finishBoot(); // 雲端模式：等登入狀態確認後才放出畫面（避免老闆先看到店面再跳儀表板）
 
     document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => switchView(b.dataset.view));
 
@@ -5485,8 +5554,11 @@
 
     if(FB.enabled){
       FB.auth.onAuthStateChanged(async (user) => {
+        const firstCall = !FB._authResolved;
+        FB._authResolved = true;
         FB.authUser = user;
         FB.isOwner = fbIsOwnerEmail(user && user.email);
+        try{
 
         if(FB.isOwner){
           const priv = await fbLoadDoc("shop/private");
@@ -5510,16 +5582,23 @@
         } else {
           fbUnsubscribeOrders();
           FB.firstRun = false;
-          const pub = await fbLoadDoc("shop/public");
-          if(pub && pub.products) state = stateFromPublicDoc(pub);
-          else await loadLocalInto();
-          migrateStorefront(state);
-          applyTheme(state.theme);
-          document.getElementById("storeNameEditable").textContent = state.storeName;
-          renderAll();
-          applyAccessUI();
+          if(firstCall && state._customerView){
+            // 開頁時已經載好店面了，不要再抓一次；若背景抓到更新的版本就換上
+            if(FB._pub && FB._pub.updatedAt !== FB._appliedStamp) refreshPublicView(FB._pub);
+            else applyAccessUI();
+          } else {
+            // 登出後重新載入店面
+            const pub = await fbLoadDoc("shop/public");
+            if(pub && pub.products){ FB._pub = pub; writePublicCache(pub); usePublicDoc(pub); }
+            else { await loadLocalInto(); migrateStorefront(state); applyTheme(state.theme); }
+            document.getElementById("storeNameEditable").textContent = state.storeName;
+            renderAll();
+            applyAccessUI();
+          }
           if(!document.getElementById("view-cart").classList.contains("active")) switchView("store");
         }
+
+        } finally { finishBoot(); }
       });
     }
   }
