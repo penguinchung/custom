@@ -1952,9 +1952,10 @@
         payment: sf.payment || {}
       },
       products: (state.products || []).filter(p => p.listed !== false).map(p => {
+        // 照片不放在這份文件裡（改放 productImages/{id}，避免商品一多就超過 Firestore 單一文件 1MB 上限）
         const row = {
           id: p.id, name: p.name, category: p.category || "", unit: p.unit || "件",
-          image: p.image || "", images: itemImages(p), intro: p.intro || "", detailUrl: p.detailUrl || "",
+          intro: p.intro || "", detailUrl: p.detailUrl || "",
           options: p.options || [],
           retailPrice: Number(p.retailPrice) || 0, wholesalePrice: Number(p.wholesalePrice) || 0,
           listed: true, promo: p.promo || null,
@@ -1965,7 +1966,7 @@
       }),
       composites: (state.composites || []).filter(c => c.listed !== false).map(c => {
         const row = {
-          id: c.id, name: c.name, image: c.image || "", images: itemImages(c), intro: c.intro || "", detailUrl: c.detailUrl || "",
+          id: c.id, name: c.name, intro: c.intro || "", detailUrl: c.detailUrl || "",
           options: c.options || [],
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
@@ -1975,6 +1976,10 @@
         return row;
       })
     };
+  }
+  function stripImageFields(item){
+    const { image, images, ...rest } = item;
+    return rest;
   }
 
   /* 由公開投影組出「客人視角」的 state（沒有成本、供應商、配方；庫存數量看老闆設定） */
@@ -2012,6 +2017,46 @@
   async function fbLoadDoc(path){
     try{ const s = await FB.db.doc(path).get(); return s.exists ? s.data() : null; }
     catch(e){ console.error("[Firebase] 讀取失敗 " + path + "：", e); return null; }
+  }
+
+  /* 照片單獨放在 productImages/comboImages，每個商品/組合各自一份文件，
+     這樣不管商品加到多少件，都不會因為照片疊加而撐爆 shop/private、shop/public 這兩份共用文件。
+     世界可讀（跟 shop/public 一樣），只有登入的老闆能寫。 */
+  async function fbLoadImagesMap(collectionName){
+    try{
+      const snap = await FB.db.collection(collectionName).get();
+      const map = {};
+      snap.docs.forEach(d => { map[d.id] = d.data(); });
+      return map;
+    }catch(e){ console.error("[Firebase] 讀取照片失敗 " + collectionName + "：", e); return {}; }
+  }
+  function mergeImagesInto(items, imagesMap){
+    (items || []).forEach(item => {
+      const rec = imagesMap[String(item.id)];
+      if(rec && Array.isArray(rec.images) && rec.images.length){
+        item.images = rec.images;
+        item.image = item.images[0] || "";
+      }
+      // 沒有對應的新格式紀錄：保留原本就有的 images/image（例如還沒搬過去的舊格式資料）
+    });
+  }
+  async function fetchAndMergeImages(st){
+    const [prodMap, comboMap] = await Promise.all([
+      fbLoadImagesMap("productImages"),
+      fbLoadImagesMap("comboImages")
+    ]);
+    mergeImagesInto(st.products, prodMap);
+    mergeImagesInto(st.composites, comboMap);
+  }
+  async function fbDeleteProductImages(id){
+    if(!(FB.enabled && FB.isOwner)) return;
+    try{ await FB.db.collection("productImages").doc(String(id)).delete(); }
+    catch(e){ console.error("[Firebase] 刪除商品照片失敗：", e); }
+  }
+  async function fbDeleteComboImages(id){
+    if(!(FB.enabled && FB.isOwner)) return;
+    try{ await FB.db.collection("comboImages").doc(String(id)).delete(); }
+    catch(e){ console.error("[Firebase] 刪除組合照片失敗：", e); }
   }
 
   /* ---- 開機畫面 / 店面快取：避免客人先看到記帳畫面、或空白等很久 ---- */
@@ -2092,28 +2137,58 @@
       fbSaveNow();
     }
   }
+  /* Firestore 單一批次最多 500 筆寫入，這裡切成小批次依序送出，
+     商品數量正常不會超過 1 批，純粹是防呆。 */
+  async function fbCommitInChunks(writes){
+    const chunkSize = 450;
+    for(let i = 0; i < writes.length; i += chunkSize){
+      const batch = FB.db.batch();
+      writes.slice(i, i + chunkSize).forEach(([ref, data]) => batch.set(ref, data));
+      await batch.commit();
+    }
+  }
   async function fbSaveNow(){
     if(!(FB.enabled && FB.isOwner)) return;
     clearTimeout(FB._saveTimer);
     FB._saveTimer = null;
     fbSyncState = "saving";
     renderCloudSyncStatus();
-    const priv = { ...state, orders: [], _savedAt: new Date().toISOString() };
-    const json = JSON.stringify(priv);
-    if(json.length > 900000){
-      showToast("雲端資料接近 1MB 上限（多半是上傳的照片太多）" + heaviestImageHint(), 6000);
+    const heaviest = heaviestImageItems(1)[0];
+    if(heaviest && heaviest.size > 900000){
+      showToast(`「${heaviest.name}」的照片太大（約 ${Math.round(heaviest.size / 1024)}KB），單一商品的照片最多約 1MB，請減少張數或改貼網址。`, 6000);
     }
     try{
-      await FB.db.doc("shop/private").set(priv);
-      await FB.db.doc("shop/public").set(buildPublicDoc());
+      const { products, composites, ...metaRest } = state;
+      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString() };
+      const pubMeta = buildPublicDoc();
+      // 文字資料（名稱/價格/庫存…）兩份一起存——批次寫入是「全部成功或全部失敗」，
+      // 但這兩份已經不含照片，正常不會太大，所以綁在一起沒問題。
+      await fbCommitInChunks([
+        [FB.db.doc("shop/private"), privMeta],
+        [FB.db.doc("shop/public"), pubMeta]
+      ]);
+      // 照片一定要「每個商品各自獨立送出」，不能跟上面合併成同一批次：
+      // 批次寫入只要有一筆超過 1MB 就會整批失敗，等於一項商品的照片太大會拖累其他商品全部同步不了，
+      // 完全違背「拆開存放」的目的，所以這裡改用個別送出＋各自抓錯誤，彼此不互相影響。
+      const imageWrites = [
+        ...products.map(p => ({ ref: FB.db.collection("productImages").doc(String(p.id)), data: { images: itemImages(p) }, name: p.name })),
+        ...composites.map(c => ({ ref: FB.db.collection("comboImages").doc(String(c.id)), data: { images: itemImages(c) }, name: c.name }))
+      ];
+      const results = await Promise.allSettled(imageWrites.map(w => w.ref.set(w.data)));
+      const failedNames = results.map((r, i) => r.status === "rejected" ? imageWrites[i].name : null).filter(Boolean);
       FB.firstRun = false;
       updateCloudUploadBtn();
-      fbSyncState = "saved";
+      if(failedNames.length){
+        fbLastErrorMsg = `以下商品／組合的照片太大、沒有同步成功：${failedNames.join("、")}。其餘商品已正常同步，請幫這幾項減少照片張數或改貼網址。`;
+        showToast(fbLastErrorMsg, 8000);
+        fbSyncState = "error";
+      } else {
+        fbSyncState = "saved";
+      }
     }catch(e){
       console.error("[Firebase] 儲存到雲端失敗：", e);
-      const sizeHint = (e.code === "invalid-argument" || json.length > 900000) ? heaviestImageHint() : "";
-      fbLastErrorMsg = "雲端儲存失敗：" + (e.code || e.message) + sizeHint;
-      showToast(fbLastErrorMsg, sizeHint ? 8000 : 4000);
+      fbLastErrorMsg = "雲端儲存失敗：" + (e.code || e.message);
+      showToast(fbLastErrorMsg, 4000);
       fbSyncState = "error";
     }
     renderCloudSyncStatus();
@@ -4815,6 +4890,7 @@
       state.products = state.products.filter(p => p.id !== id);
       renderProducts(); renderStockBatchRows(); renderDashboard(); renderPricing(); renderStore();
       persist();
+      fbDeleteProductImages(id);
     });
   }
 
@@ -5093,6 +5169,7 @@
       state.composites = state.composites.filter(c => c.id !== id);
       renderComboList(); renderComboBatchRows(); renderPricing(); renderDashboard(); renderStore();
       persist();
+      fbDeleteComboImages(id);
     });
   }
 
@@ -5589,8 +5666,9 @@
     if(FB.enabled){
       // 有上次的店面快取 → 直接秒開；同時在背景抓最新的，有變才更新畫面
       const cached = readPublicCache();
-      const fetchFresh = fbLoadDoc("shop/public").then(pub => {
+      const fetchFresh = fbLoadDoc("shop/public").then(async pub => {
         if(pub && pub.products){
+          await fetchAndMergeImages(pub);
           FB._pub = pub;
           writePublicCache(pub);
           if(FB._authResolved && !FB.isOwner && pub.updatedAt !== FB._appliedStamp) refreshPublicView(pub);
@@ -6079,6 +6157,7 @@
           const priv = await fbLoadDoc("shop/private");
           if(priv && priv.products){
             adoptPrivateDoc(priv);
+            await fetchAndMergeImages(state);
             FB.firstRun = false;
           } else {
             // 雲端還沒有老闆資料：保留目前（本機/範例）資料，等按上傳
@@ -6104,7 +6183,10 @@
           } else {
             // 登出後重新載入店面
             const pub = await fbLoadDoc("shop/public");
-            if(pub && pub.products){ FB._pub = pub; writePublicCache(pub); usePublicDoc(pub); }
+            if(pub && pub.products){
+              await fetchAndMergeImages(pub);
+              FB._pub = pub; writePublicCache(pub); usePublicDoc(pub);
+            }
             else { await loadLocalInto(); migrateStorefront(state); applyTheme(state.theme); }
             document.getElementById("storeNameEditable").textContent = state.storeName;
             renderAll();
