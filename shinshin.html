@@ -260,6 +260,17 @@
     width:100%; min-height:220px; display:flex; align-items:center; justify-content:center;
     color:var(--ink-soft); font-size:13px;
   }
+
+  /* ---------- product/combo variant options (color, size, ...) ---------- */
+  .opt-group{margin-top:8px;}
+  .opt-group-label{font-size:11px; font-weight:700; color:var(--ink-soft); margin-bottom:4px;}
+  .opt-pills{display:flex; flex-wrap:wrap; gap:6px;}
+  .opt-pill{
+    padding:4px 11px; border:1px solid var(--border); background:var(--surface);
+    border-radius:99px; font-size:12px; font-weight:600; color:var(--ink);
+  }
+  .opt-pill.active{background:var(--primary); border-color:var(--primary); color:#fff;}
+  .cart-line .opt-summary{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
   .card-combo-badge{
     position:absolute; top:8px; left:8px; background:var(--primary); color:#fff;
     font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:99px;
@@ -840,6 +851,11 @@
         <label>組合介紹外部連結（選填）</label>
         <input type="text" id="comboDetailUrl" placeholder="若有另外整理的介紹頁網址，客人會多看到一個連結">
       </div>
+      <div class="field" style="margin-top:12px;">
+        <label>選項類別（例如顏色、尺寸，選填；客人下單前要選一個）</label>
+        <div id="comboOptionRows"></div>
+        <button type="button" class="btn small" id="btnAddComboOption" style="margin-top:4px;">+ 新增選項類別</button>
+      </div>
       <div class="field">
         <label>配方（選擇原料商品，並填每份用量）</label>
         <div id="recipeRows"></div>
@@ -930,6 +946,11 @@
       <div class="field" style="margin-top:12px;">
         <label>商品介紹外部連結（選填）</label>
         <input type="text" id="pDetailUrl" placeholder="若有另外整理的介紹頁網址，客人會多看到一個連結">
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>選項類別（例如顏色、尺寸，選填；客人下單前要選一個）</label>
+        <div id="pOptionRows"></div>
+        <button type="button" class="btn small" id="btnAddProductOption" style="margin-top:4px;">+ 新增選項類別</button>
       </div>
 
       <div style="border-top:1px solid var(--border); padding-top:14px; margin:14px 0 10px;">
@@ -1336,6 +1357,7 @@
     </div>
     <p class="gallery-intro" id="galleryIntro" style="display:none;"></p>
     <a class="detail-link" id="galleryDetailLink" target="_blank" rel="noopener" style="display:none;">看完整介紹 →</a>
+    <div id="galleryOptions"></div>
     <button class="add-cart-btn" id="galleryAddCartBtn" style="display:none;">＋ 加入購物車</button>
   </div>
 </div>
@@ -1930,6 +1952,7 @@
         const row = {
           id: p.id, name: p.name, category: p.category || "", unit: p.unit || "件",
           image: p.image || "", images: itemImages(p), intro: p.intro || "", detailUrl: p.detailUrl || "",
+          options: p.options || [],
           retailPrice: Number(p.retailPrice) || 0, wholesalePrice: Number(p.wholesalePrice) || 0,
           listed: true, promo: p.promo || null,
           inStock: (Number(p.qty) || 0) > 0
@@ -1940,6 +1963,7 @@
       composites: (state.composites || []).filter(c => c.listed !== false).map(c => {
         const row = {
           id: c.id, name: c.name, image: c.image || "", images: itemImages(c), intro: c.intro || "", detailUrl: c.detailUrl || "",
+          options: c.options || [],
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
           canMake: comboBuildable(c) > 0
@@ -2299,7 +2323,9 @@
     grid.innerHTML = cards.join("");
     grid.querySelectorAll("[data-add-cart]").forEach(b => b.onclick = () => {
       const [kind, refId] = b.dataset.addCart.split(":");
-      addToCart(kind, refId);
+      const list = kind === "combo" ? (state.composites || []) : state.products;
+      const item = list.find(x => String(x.id) === refId);
+      addToCart(kind, refId, item ? getSelectedOptions(kind, item.id, item) : {});
     });
     grid.querySelectorAll("[data-open-detail]").forEach(el => el.onclick = () => {
       const [kind, refId] = el.dataset.openDetail.split(":");
@@ -2364,6 +2390,36 @@
     return item.image ? [item.image] : [];
   }
 
+  /* 客人目前選的選項（顏色／尺寸…），只存在瀏覽器記憶體，重新整理會重設為第一個選項 */
+  let selectedOptions = {};
+  function defaultSelectedOptions(item){
+    const sel = {};
+    (item.options || []).forEach(g => { if(g.choices && g.choices.length) sel[g.name] = g.choices[0]; });
+    return sel;
+  }
+  function getSelectedOptions(kind, id, item){
+    const key = kind + ":" + id;
+    if(!selectedOptions[key]) selectedOptions[key] = defaultSelectedOptions(item);
+    return selectedOptions[key];
+  }
+  function setSelectedOption(kind, id, groupName, value){
+    const key = kind + ":" + id;
+    if(!selectedOptions[key]) selectedOptions[key] = {};
+    selectedOptions[key][groupName] = value;
+  }
+  function optionPickerHtml(item, kind){
+    if(!item.options || !item.options.length) return "";
+    const sel = getSelectedOptions(kind, item.id, item);
+    return item.options.map(g => `<div class="opt-group">
+      <div class="opt-group-label">${g.name}</div>
+      <div class="opt-pills">${g.choices.map(c => `<button type="button" class="opt-pill ${sel[g.name]===c?'active':''}" data-opt-pick="${kind}:${item.id}:${encodeURIComponent(g.name)}:${encodeURIComponent(c)}">${c}</button>`).join("")}</div>
+    </div>`).join("");
+  }
+  function optionsText(options){
+    const entries = Object.entries(options || {});
+    return entries.map(([k,v]) => `${k} ${v}`).join("／");
+  }
+
   function photoHtml(images, badge, kind, refId){
     const list = Array.isArray(images) ? images.filter(Boolean) : (images ? [images] : []);
     const cover = list[0] || "";
@@ -2394,9 +2450,17 @@
     const link = document.getElementById("galleryDetailLink");
     const u = safeUrl(item.detailUrl);
     if(u){ link.href = u; link.style.display = "inline-block"; } else { link.style.display = "none"; }
+    document.getElementById("galleryOptions").innerHTML = optionPickerHtml(item, kind);
     renderGalleryStage();
     updateDetailCartButton();
     document.getElementById("galleryOverlay").classList.add("active");
+  }
+  function refreshDetailOptionsIfOpen(kind, id){
+    if(!document.getElementById("galleryOverlay").classList.contains("active")) return;
+    if(detailKind !== kind || detailRefId !== id) return;
+    const list = kind === "combo" ? (state.composites || []) : state.products;
+    const item = list.find(x => x.id === id);
+    if(item) document.getElementById("galleryOptions").innerHTML = optionPickerHtml(item, kind);
   }
   function renderGalleryStage(){
     const hasImgs = galleryImages.length > 0;
@@ -2465,6 +2529,7 @@
         ${promoUntil}
         ${stockLineHtml(p, false, role)}
         ${detailLinkHtml(p)}
+        ${optionPickerHtml(p, "product")}
         ${cartButtonHtml("product", p.id, p.qty > 0 && pv.price > 0)}
       </div>
     </div>`;
@@ -2486,6 +2551,7 @@
         ${promoUntil}
         ${stockLineHtml(c, true, role)}
         ${detailLinkHtml(c)}
+        ${optionPickerHtml(c, "combo")}
         ${cartButtonHtml("combo", c.id, comboBuildable(c) > 0 && pv.price > 0)}
       </div>
     </div>`;
@@ -2507,7 +2573,14 @@
     try{ const raw = localStorage.getItem(CART_KEY); cart = raw ? JSON.parse(raw) : []; }
     catch(e){ cart = []; }
     if(!Array.isArray(cart)) cart = [];
+    cart.forEach(i => {
+      if(!i.uid) i.uid = cartUid();
+      if(!i.options || typeof i.options !== "object") i.options = {};
+      if(i.note == null) i.note = "";
+    });
   }
+  function cartUid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+  function optKeyOf(options){ return JSON.stringify(Object.entries(options || {}).sort()); }
 
   function loadBuyer(){
     try{ const raw = localStorage.getItem(BUYER_KEY); return raw ? JSON.parse(raw) : null; }
@@ -2544,14 +2617,16 @@
   }
   function cartCount(){ return cart.reduce((s,i) => s + (Number(i.qty)||0), 0); }
 
-  function addToCart(kind, refId){
+  function addToCart(kind, refId, options){
     refId = Number(refId);
-    const row = cart.find(i => i.kind === kind && i.refId === refId);
+    options = Object.assign({}, options || {});
+    const key = optKeyOf(options);
+    const row = cart.find(i => i.kind === kind && i.refId === refId && optKeyOf(i.options) === key);
     const have = row ? row.qty : 0;
     const max = availableQty(kind, refId);
     if(have + 1 > max){ showToast("庫存只剩 " + fmt(max) + "，沒辦法再加了。"); return; }
     if(row) row.qty += 1;
-    else cart.push({ kind, refId, qty: 1, note: "" });
+    else cart.push({ uid: cartUid(), kind, refId, qty: 1, note: "", options });
     saveCart();
     const item = kind === "combo"
       ? (state.composites||[]).find(c => c.id === refId)
@@ -2559,21 +2634,20 @@
     showToast("已加入購物車：" + (item ? item.name : ""));
     renderCart();
   }
-  function setCartQty(kind, refId, qty){
-    refId = Number(refId); qty = Math.max(0, Math.floor(Number(qty)||0));
-    const max = availableQty(kind, refId);
-    if(qty > max){ qty = max; showToast("庫存只剩 " + fmt(max)); }
-    const idx = cart.findIndex(i => i.kind === kind && i.refId === refId);
+  function setCartQty(uid, qty){
+    qty = Math.max(0, Math.floor(Number(qty)||0));
+    const idx = cart.findIndex(i => i.uid === uid);
     if(idx < 0) return;
+    const max = availableQty(cart[idx].kind, cart[idx].refId);
+    if(qty > max){ qty = max; showToast("庫存只剩 " + fmt(max)); }
     if(qty <= 0) cart.splice(idx, 1);
     else cart[idx].qty = qty;
     saveCart();
     renderCart();
   }
   function clearCart(){ cart = []; saveCart(); }
-  function setCartNote(kind, refId, note){
-    refId = Number(refId);
-    const row = cart.find(i => i.kind === kind && i.refId === refId);
+  function setCartNote(uid, note){
+    const row = cart.find(i => i.uid === uid);
     if(!row) return;
     row.note = String(note || "").slice(0, 200);
     saveCart();
@@ -2587,20 +2661,20 @@
         const c = (state.composites||[]).find(x => x.id === i.refId);
         if(!c || !isListed(c)){ removeSilently(i); return; }
         const pv = comboPriceView(c, role === "owner" ? "retail" : role);
-        lines.push({ kind:"combo", refId:c.id, name:c.name, image:c.image, qty:i.qty, note:i.note || "",
+        lines.push({ uid:i.uid, kind:"combo", refId:c.id, name:c.name, image:c.image, qty:i.qty, note:i.note || "", options:i.options || {},
                      unitPrice:pv.price, promo:pv.kind === "promo", max:comboBuildable(c) });
       } else {
         const p = state.products.find(x => x.id === i.refId);
         if(!p || !isListed(p)){ removeSilently(i); return; }
         const pv = productPriceView(p, role === "owner" ? "retail" : role);
-        lines.push({ kind:"product", refId:p.id, name:p.name, image:p.image, qty:i.qty, note:i.note || "",
+        lines.push({ uid:i.uid, kind:"product", refId:p.id, name:p.name, image:p.image, qty:i.qty, note:i.note || "", options:i.options || {},
                      unitPrice:pv.price, promo:pv.kind === "promo", max:p.qty, unit:p.unit });
       }
     });
     return lines;
   }
   function removeSilently(i){
-    const idx = cart.findIndex(x => x.kind === i.kind && x.refId === i.refId);
+    const idx = cart.findIndex(x => x.uid === i.uid);
     if(idx >= 0){ cart.splice(idx, 1); saveCart(); }
   }
   function cartSubtotal(role){
@@ -2677,9 +2751,11 @@
         ? `<img src="${l.image}" alt="" onerror="this.style.display='none'">`
         : `<div class="noimg">${l.kind==="combo"?"組合":"無圖"}</div>`;
       const noteVal = (l.note || "").replace(/"/g, "&quot;");
-      return `<div class="cart-line" data-ck="${l.kind}:${l.refId}">
+      const optTxt = optionsText(l.options);
+      return `<div class="cart-line" data-uid="${l.uid}">
         ${img}
         <div class="ci-name">${l.name}${l.promo?' <span class="order-status os-pending">優惠價</span>':""}
+          ${optTxt ? `<div class="opt-summary">${optTxt}</div>` : ""}
           <div class="ci-price">$${fmt(l.unitPrice)} × ${l.qty} ＝ $${fmt(l.unitPrice*l.qty)}</div>
           <input type="text" class="cart-note-input" data-noteinput placeholder="備註（例如：尺寸／顏色）" value="${noteVal}" maxlength="200">
         </div>
@@ -2692,13 +2768,13 @@
     }).join("");
 
     box.querySelectorAll(".cart-line").forEach(row => {
-      const [kind, refId] = row.dataset.ck.split(":");
+      const uid = row.dataset.uid;
       row.querySelectorAll("[data-step]").forEach(b => b.onclick = () => {
-        const cur = cart.find(i => i.kind === kind && i.refId === Number(refId));
-        setCartQty(kind, refId, (cur ? cur.qty : 0) + Number(b.dataset.step));
+        const cur = cart.find(i => i.uid === uid);
+        setCartQty(uid, (cur ? cur.qty : 0) + Number(b.dataset.step));
       });
-      row.querySelector("[data-qtyinput]").onchange = e => setCartQty(kind, refId, e.target.value);
-      row.querySelector("[data-noteinput]").addEventListener("input", e => setCartNote(kind, refId, e.target.value));
+      row.querySelector("[data-qtyinput]").onchange = e => setCartQty(uid, e.target.value);
+      row.querySelector("[data-noteinput]").addEventListener("input", e => setCartNote(uid, e.target.value));
     });
 
     const sub = cartSubtotal(role);
@@ -2821,7 +2897,7 @@
       elevenSelfNumber: role === "wholesale",
       note: document.getElementById("coNote").value.trim(),
       status: "pending",
-      items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice, note:l.note || "" })),
+      items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice, note:l.note || "", options:l.options || {} })),
       subtotal, shippingFee, total: subtotal + shippingFee
     };
     if(FB.enabled){
@@ -2892,7 +2968,10 @@
     lines.push("配送：" + methodText(order) + "　" + (order.method === "711" ? "取貨門市：" : "收件地址：") + order.dest);
     if(order.elevenSelfNumber) lines.push("（7-11 大宗寄件，單號由超商系統配號）");
     lines.push("－－－－－－－－－－");
-    order.items.forEach(it => lines.push(`${it.name} x${it.qty}　$${fmt(it.unitPrice)}／件　小計 $${fmt(it.unitPrice*it.qty)}${it.note ? "　備註："+it.note : ""}`));
+    order.items.forEach(it => {
+      const optTxt = optionsText(it.options);
+      lines.push(`${it.name}${optTxt ? "（"+optTxt+"）" : ""} x${it.qty}　$${fmt(it.unitPrice)}／件　小計 $${fmt(it.unitPrice*it.qty)}${it.note ? "　備註："+it.note : ""}`);
+    });
     lines.push("－－－－－－－－－－");
     lines.push("商品小計：$" + fmt(orderSubtotal(order)));
     lines.push("運費（" + methodText(order).replace(/（|）/g, m => m === "（" ? "‧" : "") + "）：$" + fmt(orderShipping(order)));
@@ -3001,7 +3080,11 @@
     }
     document.getElementById("orderCount").textContent = list.length + " 筆";
     body.innerHTML = list.length ? list.map(o => {
-      const itemsTxt = o.items.map(i => `${i.name}×${i.qty}${i.note ? `（${i.note}）` : ""}`).join("、");
+      const itemsTxt = o.items.map(i => {
+        const optTxt = optionsText(i.options);
+        const extra = [optTxt, i.note].filter(Boolean).join("，");
+        return `${i.name}×${i.qty}${extra ? `（${extra}）` : ""}`;
+      }).join("、");
       const due = orderDueDate(o);
       return `<tr>
         <td><button class="btn small" data-vieworder="${o.id}">${o.no}</button></td>
@@ -4051,6 +4134,38 @@
       ? `已加入 ${pendingProductImages.length}／20 張，第 1 張會顯示在店面卡片上。若有雲端同步且未開通 Storage，建議以照片網址為主，上傳照片會佔用同步資料的容量。`
       : "尚未加入照片，店面會顯示「尚無照片」。";
   }
+
+  /* 選項類別編輯（顏色、尺寸…），product/combo 共用同一套 UI 邏輯 */
+  function optionRowsHtml(list){
+    if(list.length === 0) return `<p class="muted">尚未加入選項類別</p>`;
+    return list.map((g, idx) => `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
+      <input type="text" data-opt-row="${idx}" class="opt-row-name" style="flex:0 0 110px;" placeholder="類別名稱，如：顏色" value="${(g.name || "").replace(/"/g, "&quot;")}">
+      <input type="text" data-opt-row="${idx}" class="opt-row-choices" style="flex:2;" placeholder="選項，用逗號分隔，如：紅,藍,綠" value="${(g.choicesText || "").replace(/"/g, "&quot;")}">
+      <button type="button" class="btn small danger-outline" data-opt-row-remove="${idx}">移除</button>
+    </div>`).join("");
+  }
+  function wireOptionRows(containerId, list, rerender){
+    const container = document.getElementById(containerId);
+    container.querySelectorAll(".opt-row-name").forEach(inp => {
+      inp.oninput = () => { list[Number(inp.dataset.optRow)].name = inp.value; };
+    });
+    container.querySelectorAll(".opt-row-choices").forEach(inp => {
+      inp.oninput = () => { list[Number(inp.dataset.optRow)].choicesText = inp.value; };
+    });
+    container.querySelectorAll("[data-opt-row-remove]").forEach(b => {
+      b.onclick = () => { list.splice(Number(b.dataset.optRowRemove), 1); rerender(); };
+    });
+  }
+  let pendingProductOptions = [];
+  function renderProductOptionRows(){
+    document.getElementById("pOptionRows").innerHTML = optionRowsHtml(pendingProductOptions);
+    wireOptionRows("pOptionRows", pendingProductOptions, renderProductOptionRows);
+  }
+  function optionGroupsFromPending(list){
+    return list
+      .map(g => ({ name: (g.name || "").trim(), choices: (g.choicesText || "").split(",").map(s => s.trim()).filter(Boolean) }))
+      .filter(g => g.name && g.choices.length > 0);
+  }
   function updateProductMarginHint(){
     const retail = Number(document.getElementById("pRetail").value) || 0;
     const whole = Number(document.getElementById("pWholesale").value) || 0;
@@ -4088,6 +4203,8 @@
     document.getElementById("pPromoEnd").value = "";
     pendingProductImages = [];
     renderProductImageList();
+    pendingProductOptions = [];
+    renderProductOptionRows();
     updateProductMarginHint();
     productFormReturnView = null;
   }
@@ -4118,7 +4235,9 @@
     document.getElementById("pPromoPrice").value = pr.price || 0;
     document.getElementById("pPromoStart").value = pr.start || "";
     document.getElementById("pPromoEnd").value = pr.end || "";
+    pendingProductOptions = (p.options || []).map(g => ({ name: g.name, choicesText: (g.choices || []).join(",") }));
     renderProductImageList();
+    renderProductOptionRows();
     updateProductMarginHint();
   }
 
@@ -4153,6 +4272,7 @@
       image, images,
       intro: document.getElementById("pIntro").value.trim(),
       detailUrl: document.getElementById("pDetailUrl").value.trim(),
+      options: optionGroupsFromPending(pendingProductOptions),
       retailPrice: Number(document.getElementById("pRetail").value) || 0,
       wholesalePrice: Number(document.getElementById("pWholesale").value) || 0,
       listed: document.getElementById("pListed").value === "1",
@@ -4678,6 +4798,11 @@
       ? `已加入 ${pendingComboImages.length}／20 張，第 1 張會顯示在店面卡片上。若有雲端同步且未開通 Storage，建議以照片網址為主，上傳照片會佔用同步資料的容量。`
       : "尚未加入照片，店面會顯示「尚無照片」。";
   }
+  let pendingComboOptions = [];
+  function renderComboOptionRows(){
+    document.getElementById("comboOptionRows").innerHTML = optionRowsHtml(pendingComboOptions);
+    wireOptionRows("comboOptionRows", pendingComboOptions, renderComboOptionRows);
+  }
 
   function resetComboForm(){
     document.getElementById("editComboId").value = "";
@@ -4697,6 +4822,8 @@
     document.getElementById("comboFormHint").textContent = "";
     pendingComboImages = [];
     renderComboImageList();
+    pendingComboOptions = [];
+    renderComboOptionRows();
     pendingRecipe = [];
     renderRecipeRows();
   }
@@ -4721,6 +4848,8 @@
     document.getElementById("comboDetailUrl").value = c.detailUrl || "";
     pendingComboImages = itemImages(c).slice();
     renderComboImageList();
+    pendingComboOptions = (c.options || []).map(g => ({ name: g.name, choicesText: (g.choices || []).join(",") }));
+    renderComboOptionRows();
     pendingRecipe = c.recipe.map(normalizeRecipeItem);
     renderRecipeRows();
   }
@@ -4828,6 +4957,7 @@
       image: comboImages[0] || "", images: comboImages,
       intro: document.getElementById("comboIntro").value.trim(),
       detailUrl: document.getElementById("comboDetailUrl").value.trim(),
+      options: optionGroupsFromPending(pendingComboOptions),
       promo: (cpp > 0 && cps && cpe) ? { price: cpp, start: cps, end: cpe } : null
     };
     if(id){
@@ -5273,6 +5403,7 @@
       p.image = p.images[0] || "";
       if(typeof p.intro !== "string") p.intro = "";
       if(typeof p.detailUrl !== "string") p.detailUrl = "";
+      if(!Array.isArray(p.options)) p.options = [];
       if(p.retailPrice == null) p.retailPrice = 0;
       if(p.wholesalePrice == null) p.wholesalePrice = 0;
       if(p.listed == null) p.listed = true;
@@ -5285,6 +5416,7 @@
       c.image = c.images[0] || "";
       if(typeof c.intro !== "string") c.intro = "";
       if(typeof c.detailUrl !== "string") c.detailUrl = "";
+      if(!Array.isArray(c.options)) c.options = [];
       if(c.wholesalePrice == null) c.wholesalePrice = 0;
       if(c.listed == null) c.listed = true;
       if(!("promo" in c)) c.promo = null;
@@ -5585,6 +5717,16 @@
       input.value = "";
       renderComboImageList();
     };
+    document.getElementById("btnAddProductOption").onclick = () => {
+      if(pendingProductOptions.length >= 5){ showToast("最多 5 種選項類別"); return; }
+      pendingProductOptions.push({ name: "", choicesText: "" });
+      renderProductOptionRows();
+    };
+    document.getElementById("btnAddComboOption").onclick = () => {
+      if(pendingComboOptions.length >= 5){ showToast("最多 5 種選項類別"); return; }
+      pendingComboOptions.push({ name: "", choicesText: "" });
+      renderComboOptionRows();
+    };
 
     document.addEventListener("click", e => {
       const moveBtn = e.target.closest("[data-img-move]");
@@ -5604,6 +5746,15 @@
         const arr = prefix === "p" ? pendingProductImages : pendingComboImages;
         arr.splice(Number(idxStr), 1);
         if(prefix === "p") renderProductImageList(); else renderComboImageList();
+        return;
+      }
+      const optBtn = e.target.closest("[data-opt-pick]");
+      if(optBtn){
+        const [kind, idStr, nameEnc, valEnc] = optBtn.dataset.optPick.split(":");
+        const id = Number(idStr);
+        setSelectedOption(kind, id, decodeURIComponent(nameEnc), decodeURIComponent(valEnc));
+        renderStore();
+        refreshDetailOptionsIfOpen(kind, id);
       }
     });
 
@@ -5620,7 +5771,10 @@
       if(e.target.id === "galleryOverlay") closeGallery();
     };
     document.getElementById("galleryAddCartBtn").onclick = () => {
-      if(detailKind && detailRefId != null) addToCart(detailKind, detailRefId);
+      if(!detailKind || detailRefId == null) return;
+      const list = detailKind === "combo" ? (state.composites || []) : state.products;
+      const item = list.find(x => x.id === detailRefId);
+      addToCart(detailKind, detailRefId, item ? getSelectedOptions(detailKind, detailRefId, item) : {});
     };
 
     document.getElementById("btnSaveProduct").onclick = saveProduct;
