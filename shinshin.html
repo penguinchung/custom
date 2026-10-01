@@ -426,6 +426,7 @@
       <span class="role-pill" id="rolePill">一般客</span>
       <button class="btn" id="btnLogin">🔓 登入</button>
       <button class="btn" id="btnLogout" style="display:none;">登出</button>
+      <span class="muted" id="cloudSyncStatus" style="display:none; font-size:12px;"></span>
       <button class="btn primary" id="btnCloudUpload" style="display:none;">☁ 上傳目前資料到雲端</button>
       <span id="adminToolbar" style="display:none; gap:8px;">
         <button class="btn" id="btnExport">匯出資料</button>
@@ -2037,13 +2038,42 @@
     applyAccessUI();
   }
 
+  /* 同步狀態：idle(非老闆/未連雲端)｜pending(有異動排隊中)｜saving｜saved｜error
+     手機瀏覽器背景化/關閉分頁時常常不會等 setTimeout 跑完，所以另外用
+     visibilitychange/pagehide 在「頁面要被收起來前」把排隊中的異動立刻存一次，
+     避免看起來「新增商品後沒同步、資料不見了」。 */
+  let fbSyncState = "idle";
+  function renderCloudSyncStatus(){
+    const el = document.getElementById("cloudSyncStatus");
+    if(!el) return;
+    if(!(FB.enabled && FB.isOwner)){ el.style.display = "none"; return; }
+    el.style.display = "inline";
+    el.style.color = fbSyncState === "error" ? "var(--danger)" : "";
+    el.textContent = fbSyncState === "pending" ? "● 有異動尚未同步雲端…"
+      : fbSyncState === "saving" ? "⏳ 同步雲端中…"
+      : fbSyncState === "error" ? "⚠ 雲端同步失敗，請勿離開"
+      : "✓ 已同步雲端";
+  }
   function fbQueueSave(){
     if(!(FB.enabled && FB.isOwner)) return;
+    fbSyncState = "pending";
+    renderCloudSyncStatus();
     clearTimeout(FB._saveTimer);
     FB._saveTimer = setTimeout(fbSaveNow, 800);
   }
+  function fbFlushPendingSave(){
+    if(FB.enabled && FB.isOwner && FB._saveTimer){
+      clearTimeout(FB._saveTimer);
+      FB._saveTimer = null;
+      fbSaveNow();
+    }
+  }
   async function fbSaveNow(){
     if(!(FB.enabled && FB.isOwner)) return;
+    clearTimeout(FB._saveTimer);
+    FB._saveTimer = null;
+    fbSyncState = "saving";
+    renderCloudSyncStatus();
     const priv = { ...state, orders: [], _savedAt: new Date().toISOString() };
     const json = JSON.stringify(priv);
     if(json.length > 900000){
@@ -2054,11 +2084,18 @@
       await FB.db.doc("shop/public").set(buildPublicDoc());
       FB.firstRun = false;
       updateCloudUploadBtn();
+      fbSyncState = "saved";
     }catch(e){
       console.error("[Firebase] 儲存到雲端失敗：", e);
       showToast("雲端儲存失敗：" + (e.code || e.message));
+      fbSyncState = "error";
     }
+    renderCloudSyncStatus();
   }
+  document.addEventListener("visibilitychange", () => {
+    if(document.visibilityState === "hidden") fbFlushPendingSave();
+  });
+  window.addEventListener("pagehide", fbFlushPendingSave);
 
   async function fbCreateOrder(order){
     const clean = { ...order }; delete clean._docId;
@@ -2148,6 +2185,7 @@
     loginBtn.textContent = (!FB.enabled && state && !(state.ownerPassword || "").trim()) ? "⚙ 老闆設定" : "🔓 登入";
     document.getElementById("btnLogout").style.display = (owner || role === "wholesale") ? "inline-flex" : "none";
     updateCloudUploadBtn();
+    renderCloudSyncStatus();
 
     const pill = document.getElementById("rolePill");
     pill.textContent = roleLabel(role) + (owner ? "（管理中）" : role === "wholesale" ? "（批發價）" : "");
