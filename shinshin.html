@@ -2289,6 +2289,7 @@
     renderCloudSyncStatus();
 
     const pill = document.getElementById("rolePill");
+    pill.style.display = (!owner && role === "retail") ? "none" : "inline-flex";
     pill.textContent = roleLabel(role) + (owner ? "（管理中）" : role === "wholesale" ? "（批發價）" : "");
     pill.className = "role-pill" + (owner ? " owner" : role === "wholesale" ? " wholesale" : "");
 
