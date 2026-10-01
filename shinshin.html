@@ -247,11 +247,19 @@
   .product-card .stock-line.low{color:var(--amber);}
   .product-card .stock-line.out{color:var(--danger);}
   .product-card .owner-cost{font-size:11px; color:var(--ink-soft); margin-top:4px; font-family:var(--mono);}
-  .product-card .detail-link{
+  .detail-link{
     display:inline-block; margin-top:8px; font-size:12px; font-weight:700; color:var(--primary-dark);
     text-decoration:none; border-bottom:1px solid var(--primary-soft);
   }
-  .product-card .detail-link:hover{border-bottom-color:var(--primary-dark);}
+  .detail-link:hover{border-bottom-color:var(--primary-dark);}
+  .product-card .pname{cursor:pointer;}
+  .gallery-intro{
+    margin-top:10px; font-size:13px; line-height:1.6; white-space:pre-wrap; text-align:left; color:var(--ink);
+  }
+  .gallery-noimg{
+    width:100%; min-height:220px; display:flex; align-items:center; justify-content:center;
+    color:var(--ink-soft); font-size:13px;
+  }
   .card-combo-badge{
     position:absolute; top:8px; left:8px; background:var(--primary); color:#fff;
     font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:99px;
@@ -284,7 +292,7 @@
   .image-manager-actions .btn.small{padding:2px 5px; font-size:11px; flex:1;}
 
   /* ---------- storefront photo gallery (lightbox) ---------- */
-  .ph-wrap.has-gallery{cursor:pointer;}
+  .ph-wrap{cursor:pointer;}
   .gallery-count-badge{
     position:absolute; bottom:8px; right:8px; background:rgba(20,30,26,.55); color:#fff;
     font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:99px;
@@ -328,6 +336,10 @@
   }
   .cart-line .ci-name{flex:1; font-size:13px; font-weight:600; line-height:1.3;}
   .cart-line .ci-price{font-family:var(--mono); font-size:12.5px; color:var(--ink-soft);}
+  .cart-note-input{
+    margin-top:5px; width:100%; font-size:12px; padding:4px 7px; border:1px solid var(--border);
+    border-radius:6px; background:var(--surface);
+  }
   .qty-stepper{display:flex; align-items:center; gap:6px;}
   .qty-stepper button{
     width:26px; height:26px; border:1px solid var(--border); background:var(--surface); border-radius:6px;
@@ -821,8 +833,12 @@
         <p class="muted" id="comboImageHint" style="margin-top:4px;"></p>
       </div>
       <div class="field" style="margin-top:12px;">
-        <label>組合介紹連結（選填）</label>
-        <input type="text" id="comboDetailUrl" placeholder="客人可點進去看完整照片與說明">
+        <label>組合簡介（選填，客人點商品會跳出視窗看到）</label>
+        <textarea id="comboIntro" rows="3" placeholder="材質、內容物、搭配方式等簡短說明"></textarea>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>組合介紹外部連結（選填）</label>
+        <input type="text" id="comboDetailUrl" placeholder="若有另外整理的介紹頁網址，客人會多看到一個連結">
       </div>
       <div class="field">
         <label>配方（選擇原料商品，並填每份用量）</label>
@@ -908,8 +924,12 @@
         <p class="muted" id="pImageHint" style="margin-top:4px;"></p>
       </div>
       <div class="field" style="margin-top:12px;">
-        <label>商品介紹連結（選填）</label>
-        <input type="text" id="pDetailUrl" placeholder="貼上你整理好的介紹頁網址，客人可點進去看完整照片與說明">
+        <label>商品簡介（選填，客人點商品會跳出視窗看到）</label>
+        <textarea id="pIntro" rows="3" placeholder="材質、尺寸建議、使用方式等簡短說明"></textarea>
+      </div>
+      <div class="field" style="margin-top:12px;">
+        <label>商品介紹外部連結（選填）</label>
+        <input type="text" id="pDetailUrl" placeholder="若有另外整理的介紹頁網址，客人會多看到一個連結">
       </div>
 
       <div style="border-top:1px solid var(--border); padding-top:14px; margin:14px 0 10px;">
@@ -1300,18 +1320,23 @@
   </div>
 </div>
 
-<!-- Product/combo photo gallery (lightbox) -->
+<!-- Product/combo detail (photo gallery + intro) -->
 <div class="overlay" id="galleryOverlay">
-  <div class="modal" style="max-width:520px; padding:14px;">
+  <div class="modal" style="max-width:520px; padding:14px; text-align:left;">
+    <h3 id="galleryTitle" style="font-size:15.5px; margin:0 0 10px;"></h3>
     <div class="gallery-stage">
+      <div class="gallery-noimg" id="galleryNoImage">尚無照片</div>
+      <img id="galleryImage" src="" alt="" style="display:none;">
       <button type="button" class="gallery-nav gallery-prev" id="galleryPrev" aria-label="上一張">‹</button>
-      <img id="galleryImage" src="" alt="">
       <button type="button" class="gallery-nav gallery-next" id="galleryNext" aria-label="下一張">›</button>
     </div>
     <div class="gallery-footer">
       <span class="muted" id="galleryCounter"></span>
       <button class="btn small" id="galleryCloseBtn">關閉</button>
     </div>
+    <p class="gallery-intro" id="galleryIntro" style="display:none;"></p>
+    <a class="detail-link" id="galleryDetailLink" target="_blank" rel="noopener" style="display:none;">看完整介紹 →</a>
+    <button class="add-cart-btn" id="galleryAddCartBtn" style="display:none;">＋ 加入購物車</button>
   </div>
 </div>
 
@@ -1904,7 +1929,7 @@
       products: (state.products || []).filter(p => p.listed !== false).map(p => {
         const row = {
           id: p.id, name: p.name, category: p.category || "", unit: p.unit || "件",
-          image: p.image || "", images: itemImages(p), detailUrl: p.detailUrl || "",
+          image: p.image || "", images: itemImages(p), intro: p.intro || "", detailUrl: p.detailUrl || "",
           retailPrice: Number(p.retailPrice) || 0, wholesalePrice: Number(p.wholesalePrice) || 0,
           listed: true, promo: p.promo || null,
           inStock: (Number(p.qty) || 0) > 0
@@ -1914,7 +1939,7 @@
       }),
       composites: (state.composites || []).filter(c => c.listed !== false).map(c => {
         const row = {
-          id: c.id, name: c.name, image: c.image || "", images: itemImages(c), detailUrl: c.detailUrl || "",
+          id: c.id, name: c.name, image: c.image || "", images: itemImages(c), intro: c.intro || "", detailUrl: c.detailUrl || "",
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
           canMake: comboBuildable(c) > 0
@@ -2276,11 +2301,9 @@
       const [kind, refId] = b.dataset.addCart.split(":");
       addToCart(kind, refId);
     });
-    grid.querySelectorAll("[data-open-gallery]").forEach(el => el.onclick = () => {
-      const [kind, refId] = el.dataset.openGallery.split(":");
-      const list = kind === "combo" ? (state.composites || []) : state.products;
-      const item = list.find(x => String(x.id) === refId);
-      if(item) openGallery(itemImages(item), 0);
+    grid.querySelectorAll("[data-open-detail]").forEach(el => el.onclick = () => {
+      const [kind, refId] = el.dataset.openDetail.split(":");
+      openDetail(kind, refId);
     });
     updateCartFab();
   }
@@ -2347,30 +2370,62 @@
     const inner = cover
       ? `<img class="ph" src="${cover}" alt="" loading="lazy" onerror="this.classList.add('placeholder');this.removeAttribute('src');this.textContent='圖片載入失敗';">`
       : `<div class="ph placeholder">尚無照片</div>`;
-    const clickable = list.length > 1 && kind && refId != null;
     const countBadge = list.length > 1 ? `<span class="gallery-count-badge">1／${list.length}</span>` : "";
-    const openAttr = clickable ? ` data-open-gallery="${kind}:${refId}"` : "";
-    return `<div class="ph-wrap${clickable ? ' has-gallery' : ''}"${openAttr}>${badge || ""}${inner}${countBadge}</div>`;
+    const openAttr = (kind && refId != null) ? ` data-open-detail="${kind}:${refId}"` : "";
+    return `<div class="ph-wrap"${openAttr}>${badge || ""}${inner}${countBadge}</div>`;
   }
 
   let galleryImages = [];
   let galleryIndex = 0;
-  function openGallery(images, start){
-    galleryImages = (images || []).filter(Boolean);
-    if(!galleryImages.length) return;
-    galleryIndex = Math.min(Math.max(start || 0, 0), galleryImages.length - 1);
-    renderGallery();
+  let detailKind = null;
+  let detailRefId = null;
+  function openDetail(kind, refId){
+    const list = kind === "combo" ? (state.composites || []) : state.products;
+    const item = list.find(x => String(x.id) === String(refId));
+    if(!item) return;
+    detailKind = kind;
+    detailRefId = item.id;
+    galleryImages = itemImages(item);
+    galleryIndex = 0;
+    document.getElementById("galleryTitle").textContent = item.name;
+    const introEl = document.getElementById("galleryIntro");
+    introEl.textContent = item.intro || "";
+    introEl.style.display = item.intro ? "block" : "none";
+    const link = document.getElementById("galleryDetailLink");
+    const u = safeUrl(item.detailUrl);
+    if(u){ link.href = u; link.style.display = "inline-block"; } else { link.style.display = "none"; }
+    renderGalleryStage();
+    updateDetailCartButton();
     document.getElementById("galleryOverlay").classList.add("active");
   }
-  function renderGallery(){
-    document.getElementById("galleryImage").src = galleryImages[galleryIndex];
-    document.getElementById("galleryCounter").textContent = `${galleryIndex + 1} ／ ${galleryImages.length}`;
-    document.getElementById("galleryPrev").disabled = galleryImages.length <= 1;
-    document.getElementById("galleryNext").disabled = galleryImages.length <= 1;
+  function renderGalleryStage(){
+    const hasImgs = galleryImages.length > 0;
+    document.getElementById("galleryImage").style.display = hasImgs ? "block" : "none";
+    document.getElementById("galleryNoImage").style.display = hasImgs ? "none" : "flex";
+    if(hasImgs) document.getElementById("galleryImage").src = galleryImages[galleryIndex];
+    document.getElementById("galleryCounter").textContent = hasImgs ? `${galleryIndex + 1} ／ ${galleryImages.length}` : "";
+    const multi = galleryImages.length > 1;
+    document.getElementById("galleryPrev").style.display = multi ? "flex" : "none";
+    document.getElementById("galleryNext").style.display = multi ? "flex" : "none";
+  }
+  function updateDetailCartButton(){
+    const btn = document.getElementById("galleryAddCartBtn");
+    const role = storeViewRole();
+    if(!orderingOn() || role === "owner" || !detailKind){ btn.style.display = "none"; return; }
+    const list = detailKind === "combo" ? (state.composites || []) : state.products;
+    const item = list.find(x => x.id === detailRefId);
+    if(!item){ btn.style.display = "none"; return; }
+    const pv = detailKind === "combo" ? comboPriceView(item, role) : productPriceView(item, role);
+    const canBuy = detailKind === "combo" ? (comboBuildable(item) > 0 && pv.price > 0) : (item.qty > 0 && pv.price > 0);
+    btn.style.display = "block";
+    btn.disabled = !canBuy;
+    btn.textContent = canBuy ? "＋ 加入購物車" : "暫時缺貨";
   }
   function closeGallery(){
     document.getElementById("galleryOverlay").classList.remove("active");
     document.getElementById("galleryImage").removeAttribute("src");
+    detailKind = null;
+    detailRefId = null;
   }
 
   /* 店面能不能下單（老闆預覽「看老闆」時不出現購物按鈕） */
@@ -2404,7 +2459,7 @@
     return `<div class="product-card">
       ${photoHtml(itemImages(p), null, "product", p.id)}
       <div class="body">
-        <div class="pname">${p.name}</div>
+        <div class="pname" data-open-detail="product:${p.id}">${p.name}</div>
         <div class="pcat">${p.category || ""}</div>
         <div class="price-row">${priceRow}</div>
         ${promoUntil}
@@ -2425,7 +2480,7 @@
     return `<div class="product-card">
       ${photoHtml(itemImages(c), `<span class="card-combo-badge">組合</span>`, "combo", c.id)}
       <div class="body">
-        <div class="pname">${c.name}</div>
+        <div class="pname" data-open-detail="combo:${c.id}">${c.name}</div>
         <div class="pcat">組合商品</div>
         <div class="price-row">${priceRow}</div>
         ${promoUntil}
@@ -2496,7 +2551,7 @@
     const max = availableQty(kind, refId);
     if(have + 1 > max){ showToast("庫存只剩 " + fmt(max) + "，沒辦法再加了。"); return; }
     if(row) row.qty += 1;
-    else cart.push({ kind, refId, qty: 1 });
+    else cart.push({ kind, refId, qty: 1, note: "" });
     saveCart();
     const item = kind === "combo"
       ? (state.composites||[]).find(c => c.id === refId)
@@ -2516,6 +2571,13 @@
     renderCart();
   }
   function clearCart(){ cart = []; saveCart(); }
+  function setCartNote(kind, refId, note){
+    refId = Number(refId);
+    const row = cart.find(i => i.kind === kind && i.refId === refId);
+    if(!row) return;
+    row.note = String(note || "").slice(0, 200);
+    saveCart();
+  }
 
   /* 把購物車裡的項目，用「目前這位客人身分」的價格解析成明細 */
   function resolveCart(role){
@@ -2525,13 +2587,13 @@
         const c = (state.composites||[]).find(x => x.id === i.refId);
         if(!c || !isListed(c)){ removeSilently(i); return; }
         const pv = comboPriceView(c, role === "owner" ? "retail" : role);
-        lines.push({ kind:"combo", refId:c.id, name:c.name, image:c.image, qty:i.qty,
+        lines.push({ kind:"combo", refId:c.id, name:c.name, image:c.image, qty:i.qty, note:i.note || "",
                      unitPrice:pv.price, promo:pv.kind === "promo", max:comboBuildable(c) });
       } else {
         const p = state.products.find(x => x.id === i.refId);
         if(!p || !isListed(p)){ removeSilently(i); return; }
         const pv = productPriceView(p, role === "owner" ? "retail" : role);
-        lines.push({ kind:"product", refId:p.id, name:p.name, image:p.image, qty:i.qty,
+        lines.push({ kind:"product", refId:p.id, name:p.name, image:p.image, qty:i.qty, note:i.note || "",
                      unitPrice:pv.price, promo:pv.kind === "promo", max:p.qty, unit:p.unit });
       }
     });
@@ -2614,10 +2676,12 @@
       const img = l.image
         ? `<img src="${l.image}" alt="" onerror="this.style.display='none'">`
         : `<div class="noimg">${l.kind==="combo"?"組合":"無圖"}</div>`;
+      const noteVal = (l.note || "").replace(/"/g, "&quot;");
       return `<div class="cart-line" data-ck="${l.kind}:${l.refId}">
         ${img}
         <div class="ci-name">${l.name}${l.promo?' <span class="order-status os-pending">優惠價</span>':""}
           <div class="ci-price">$${fmt(l.unitPrice)} × ${l.qty} ＝ $${fmt(l.unitPrice*l.qty)}</div>
+          <input type="text" class="cart-note-input" data-noteinput placeholder="備註（例如：尺寸／顏色）" value="${noteVal}" maxlength="200">
         </div>
         <div class="qty-stepper">
           <button data-step="-1">−</button>
@@ -2634,6 +2698,7 @@
         setCartQty(kind, refId, (cur ? cur.qty : 0) + Number(b.dataset.step));
       });
       row.querySelector("[data-qtyinput]").onchange = e => setCartQty(kind, refId, e.target.value);
+      row.querySelector("[data-noteinput]").addEventListener("input", e => setCartNote(kind, refId, e.target.value));
     });
 
     const sub = cartSubtotal(role);
@@ -2756,7 +2821,7 @@
       elevenSelfNumber: role === "wholesale",
       note: document.getElementById("coNote").value.trim(),
       status: "pending",
-      items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice })),
+      items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice, note:l.note || "" })),
       subtotal, shippingFee, total: subtotal + shippingFee
     };
     if(FB.enabled){
@@ -2827,7 +2892,7 @@
     lines.push("配送：" + methodText(order) + "　" + (order.method === "711" ? "取貨門市：" : "收件地址：") + order.dest);
     if(order.elevenSelfNumber) lines.push("（7-11 大宗寄件，單號由超商系統配號）");
     lines.push("－－－－－－－－－－");
-    order.items.forEach(it => lines.push(`${it.name} x${it.qty}　$${fmt(it.unitPrice)}／件　小計 $${fmt(it.unitPrice*it.qty)}`));
+    order.items.forEach(it => lines.push(`${it.name} x${it.qty}　$${fmt(it.unitPrice)}／件　小計 $${fmt(it.unitPrice*it.qty)}${it.note ? "　備註："+it.note : ""}`));
     lines.push("－－－－－－－－－－");
     lines.push("商品小計：$" + fmt(orderSubtotal(order)));
     lines.push("運費（" + methodText(order).replace(/（|）/g, m => m === "（" ? "‧" : "") + "）：$" + fmt(orderShipping(order)));
@@ -2936,7 +3001,7 @@
     }
     document.getElementById("orderCount").textContent = list.length + " 筆";
     body.innerHTML = list.length ? list.map(o => {
-      const itemsTxt = o.items.map(i => `${i.name}×${i.qty}`).join("、");
+      const itemsTxt = o.items.map(i => `${i.name}×${i.qty}${i.note ? `（${i.note}）` : ""}`).join("、");
       const due = orderDueDate(o);
       return `<tr>
         <td><button class="btn small" data-vieworder="${o.id}">${o.no}</button></td>
@@ -4016,6 +4081,7 @@
     document.getElementById("pListed").value = "1";
     document.getElementById("pImageUrl").value = "";
     document.getElementById("pImageFile").value = "";
+    document.getElementById("pIntro").value = "";
     document.getElementById("pDetailUrl").value = "";
     document.getElementById("pPromoPrice").value = 0;
     document.getElementById("pPromoStart").value = "";
@@ -4045,6 +4111,7 @@
     document.getElementById("pListed").value = isListed(p) ? "1" : "0";
     document.getElementById("pImageUrl").value = "";
     document.getElementById("pImageFile").value = "";
+    document.getElementById("pIntro").value = p.intro || "";
     document.getElementById("pDetailUrl").value = p.detailUrl || "";
     pendingProductImages = itemImages(p).slice();
     const pr = normPromo(p) || {};
@@ -4084,6 +4151,7 @@
       threshold: Number(document.getElementById("pThreshold").value) || 0,
       unit: document.getElementById("pUnit").value.trim() || "件",
       image, images,
+      intro: document.getElementById("pIntro").value.trim(),
       detailUrl: document.getElementById("pDetailUrl").value.trim(),
       retailPrice: Number(document.getElementById("pRetail").value) || 0,
       wholesalePrice: Number(document.getElementById("pWholesale").value) || 0,
@@ -4624,6 +4692,7 @@
     document.getElementById("comboPromoEnd").value = "";
     document.getElementById("comboImageUrl").value = "";
     document.getElementById("comboImageFile").value = "";
+    document.getElementById("comboIntro").value = "";
     document.getElementById("comboDetailUrl").value = "";
     document.getElementById("comboFormHint").textContent = "";
     pendingComboImages = [];
@@ -4648,6 +4717,7 @@
     document.getElementById("comboPromoEnd").value = pr.end || "";
     document.getElementById("comboImageUrl").value = "";
     document.getElementById("comboImageFile").value = "";
+    document.getElementById("comboIntro").value = c.intro || "";
     document.getElementById("comboDetailUrl").value = c.detailUrl || "";
     pendingComboImages = itemImages(c).slice();
     renderComboImageList();
@@ -4756,6 +4826,7 @@
       wholesalePrice: Number(document.getElementById("comboWholesale").value) || 0,
       listed: document.getElementById("comboListed").value === "1",
       image: comboImages[0] || "", images: comboImages,
+      intro: document.getElementById("comboIntro").value.trim(),
       detailUrl: document.getElementById("comboDetailUrl").value.trim(),
       promo: (cpp > 0 && cps && cpe) ? { price: cpp, start: cps, end: cpe } : null
     };
@@ -5200,6 +5271,7 @@
       if(!Array.isArray(p.images)) p.images = p.image ? [p.image] : [];
       if(p.images.length > 20) p.images = p.images.slice(0, 20);
       p.image = p.images[0] || "";
+      if(typeof p.intro !== "string") p.intro = "";
       if(typeof p.detailUrl !== "string") p.detailUrl = "";
       if(p.retailPrice == null) p.retailPrice = 0;
       if(p.wholesalePrice == null) p.wholesalePrice = 0;
@@ -5211,6 +5283,7 @@
       if(!Array.isArray(c.images)) c.images = c.image ? [c.image] : [];
       if(c.images.length > 20) c.images = c.images.slice(0, 20);
       c.image = c.images[0] || "";
+      if(typeof c.intro !== "string") c.intro = "";
       if(typeof c.detailUrl !== "string") c.detailUrl = "";
       if(c.wholesalePrice == null) c.wholesalePrice = 0;
       if(c.listed == null) c.listed = true;
@@ -5536,15 +5609,18 @@
 
     document.getElementById("galleryPrev").onclick = () => {
       galleryIndex = (galleryIndex - 1 + galleryImages.length) % galleryImages.length;
-      renderGallery();
+      renderGalleryStage();
     };
     document.getElementById("galleryNext").onclick = () => {
       galleryIndex = (galleryIndex + 1) % galleryImages.length;
-      renderGallery();
+      renderGalleryStage();
     };
     document.getElementById("galleryCloseBtn").onclick = closeGallery;
     document.getElementById("galleryOverlay").onclick = e => {
       if(e.target.id === "galleryOverlay") closeGallery();
+    };
+    document.getElementById("galleryAddCartBtn").onclick = () => {
+      if(detailKind && detailRefId != null) addToCart(detailKind, detailRefId);
     };
 
     document.getElementById("btnSaveProduct").onclick = saveProduct;
