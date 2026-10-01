@@ -1513,12 +1513,12 @@
     };
   }
 
-  function showToast(msg){
+  function showToast(msg, duration){
     const t = document.getElementById("toast");
     t.textContent = msg;
     t.classList.add("show");
     clearTimeout(t._timer);
-    t._timer = setTimeout(() => t.classList.remove("show"), 2600);
+    t._timer = setTimeout(() => t.classList.remove("show"), duration || 2600);
   }
 
   function fallbackCopy(text, done){
@@ -2043,15 +2043,37 @@
      visibilitychange/pagehide 在「頁面要被收起來前」把排隊中的異動立刻存一次，
      避免看起來「新增商品後沒同步、資料不見了」。 */
   let fbSyncState = "idle";
+  let fbLastErrorMsg = "";
+  /* 找出目前「上傳照片（data: 網址）」佔用位元組最多的幾個商品/組合，
+     用來在雲端資料太大、存檔失敗時明確指出該去改哪幾項，而不是只丟一個看不懂的錯誤代碼。 */
+  function heaviestImageItems(limit){
+    const items = [];
+    (state.products || []).forEach(p => {
+      const size = itemImages(p).reduce((s, u) => s + (u && u.startsWith("data:") ? u.length : 0), 0);
+      if(size > 0) items.push({ name: p.name, size });
+    });
+    (state.composites || []).forEach(c => {
+      const size = itemImages(c).reduce((s, u) => s + (u && u.startsWith("data:") ? u.length : 0), 0);
+      if(size > 0) items.push({ name: c.name, size });
+    });
+    items.sort((a, b) => b.size - a.size);
+    return items.slice(0, limit || 3);
+  }
+  function heaviestImageHint(){
+    const heavy = heaviestImageItems(3);
+    if(!heavy.length) return "";
+    return "，最佔空間的商品：" + heavy.map(h => `「${h.name}」約 ${Math.round(h.size/1024)}KB`).join("、") + "，這幾項的照片建議改成「貼網址」而不是上傳。";
+  }
   function renderCloudSyncStatus(){
     const el = document.getElementById("cloudSyncStatus");
     if(!el) return;
     if(!(FB.enabled && FB.isOwner)){ el.style.display = "none"; return; }
     el.style.display = "inline";
     el.style.color = fbSyncState === "error" ? "var(--danger)" : "";
+    el.style.cursor = fbSyncState === "error" ? "pointer" : "default";
     el.textContent = fbSyncState === "pending" ? "● 有異動尚未同步雲端…"
       : fbSyncState === "saving" ? "⏳ 同步雲端中…"
-      : fbSyncState === "error" ? "⚠ 雲端同步失敗，請勿離開"
+      : fbSyncState === "error" ? "⚠ 雲端同步失敗（點我看原因）"
       : "✓ 已同步雲端";
   }
   function fbQueueSave(){
@@ -2077,7 +2099,7 @@
     const priv = { ...state, orders: [], _savedAt: new Date().toISOString() };
     const json = JSON.stringify(priv);
     if(json.length > 900000){
-      showToast("雲端資料接近 1MB 上限（多半是上傳的照片太多），商品照片建議改用貼網址。");
+      showToast("雲端資料接近 1MB 上限（多半是上傳的照片太多）" + heaviestImageHint(), 6000);
     }
     try{
       await FB.db.doc("shop/private").set(priv);
@@ -2087,7 +2109,9 @@
       fbSyncState = "saved";
     }catch(e){
       console.error("[Firebase] 儲存到雲端失敗：", e);
-      showToast("雲端儲存失敗：" + (e.code || e.message));
+      const sizeHint = (e.code === "invalid-argument" || json.length > 900000) ? heaviestImageHint() : "";
+      fbLastErrorMsg = "雲端儲存失敗：" + (e.code || e.message) + sizeHint;
+      showToast(fbLastErrorMsg, sizeHint ? 8000 : 4000);
       fbSyncState = "error";
     }
     renderCloudSyncStatus();
@@ -5652,6 +5676,9 @@
     loginPw.addEventListener("keydown", e => { if(e.key === "Enter") submitLogin(); });
     if(loginEmail) loginEmail.addEventListener("keydown", e => { if(e.key === "Enter") submitLogin(); });
     document.getElementById("btnLogout").onclick = doLogout;
+    document.getElementById("cloudSyncStatus").onclick = () => {
+      if(fbSyncState === "error" && fbLastErrorMsg) showToast(fbLastErrorMsg, 8000);
+    };
 
     /* hero 文字（老闆可編輯） */
     const heroT = document.getElementById("heroTitle");
