@@ -1173,6 +1173,8 @@
           <option value="0">原圖不壓縮（畫質最好，檔案很大）</option>
         </select>
         <p class="muted" id="imageModeHint" style="margin-top:4px;"></p>
+        <button type="button" class="btn small" id="btnRecompressImages" style="margin-top:8px;">重新壓縮所有已上傳的照片</button>
+        <p class="muted" id="recompressHint" style="margin-top:4px;">把之前上傳（非貼網址）的照片，用上面這個設定和新的壓縮方式重新處理一次，縮小雲端資料體積，畫質幾乎沒有差別。貼網址的照片不受影響，數量多時處理需要一點時間，請勿中途關閉分頁。</p>
       </div>
       <div class="field">
         <label>批發客密碼（留空＝不開放批發價檢視）</label>
@@ -2299,34 +2301,79 @@
     const v = state.storefront && state.storefront.imageMaxDim;
     return v == null ? 900 : Number(v);   // 0 = 原圖不壓縮
   }
-  function compressImage(file, cb){
-    const max = imageMaxDim();
-    const reader = new FileReader();
-    reader.onload = () => {
-      if(!max){ cb(reader.result); return; }   // 原圖不壓縮：直接存原始 data URI
-      const img = new Image();
-      img.onload = () => {
-        let { width, height } = img;
-        if(width > max || height > max){
-          const s = max / Math.max(width, height);
-          width = Math.round(width * s);
-          height = Math.round(height * s);
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width; canvas.height = height;
-        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        try{
-          // WebP 同畫質下通常比 JPEG 小 25～35%；少數瀏覽器不支援編碼會靜靜退回 PNG（很大），
-          // 所以編完先檢查真的是 webp 才採用，不是的話改用原本的 JPEG。
-          const webp = canvas.toDataURL("image/webp", 0.8);
-          cb(webp.indexOf("data:image/webp") === 0 ? webp : canvas.toDataURL("image/jpeg", 0.82));
-        }
-        catch(e){ cb(reader.result); }
-      };
-      img.onerror = () => cb(reader.result);
-      img.src = reader.result;
+  /* 把一張已經載入瀏覽器記憶體的圖片來源（data URI 或 object URL）縮放＋轉檔。
+     上傳新照片、以及「重新壓縮已上傳的照片」都共用這個核心。 */
+  function resizeAndEncode(src, max, fallback, cb){
+    if(!max){ cb(fallback); return; }   // 原圖不壓縮：直接用原始資料
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if(width > max || height > max){
+        const s = max / Math.max(width, height);
+        width = Math.round(width * s);
+        height = Math.round(height * s);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      try{
+        // WebP 同畫質下通常比 JPEG 小 25～35%；少數瀏覽器不支援編碼會靜靜退回 PNG（很大），
+        // 所以編完先檢查真的是 webp 才採用，不是的話改用原本的 JPEG。
+        const webp = canvas.toDataURL("image/webp", 0.8);
+        cb(webp.indexOf("data:image/webp") === 0 ? webp : canvas.toDataURL("image/jpeg", 0.82));
+      }
+      catch(e){ cb(fallback); }
     };
+    img.onerror = () => cb(fallback);
+    img.src = src;
+  }
+  function compressImage(file, cb){
+    const reader = new FileReader();
+    reader.onload = () => resizeAndEncode(reader.result, imageMaxDim(), reader.result, cb);
     reader.readAsDataURL(file);
+  }
+
+  /* 「重新壓縮所有已上傳的照片」：把每項商品/組合裡「上傳（data:）」的照片，
+     用目前的壓縮設定（含新的 WebP 轉檔）重新處理一次；貼網址的照片不受影響。
+     只有新檔案真的變小才會換掉，避免極少數情況下重新轉檔反而變大。 */
+  function recompressDataUrl(src){
+    return new Promise(resolve => resizeAndEncode(src, imageMaxDim(), src, resolve));
+  }
+  async function recompressAllImages(){
+    const btn = document.getElementById("btnRecompressImages");
+    // 只找「上傳但還不是 webp」的照片：已經轉過的就跳過，避免重複點擊時對同一張圖一直重新轉檔、畫質越轉越差。
+    const needsCompress = url => url && url.indexOf("data:") === 0 && url.indexOf("data:image/webp") !== 0;
+    const targets = [];
+    (state.products || []).forEach(p => {
+      (p.images || []).forEach((url, i) => { if(needsCompress(url)) targets.push({ owner: p, idx: i }); });
+    });
+    (state.composites || []).forEach(c => {
+      (c.images || []).forEach((url, i) => { if(needsCompress(url)) targets.push({ owner: c, idx: i }); });
+    });
+    if(targets.length === 0){ showToast("沒有需要重新壓縮的照片，已經是最新格式了。"); return; }
+    if(!imageMaxDim()){ showToast("目前「商品照片上傳處理」設定是「原圖不壓縮」，請先改成 900px 或 1600px 再重新壓縮。"); return; }
+    btn.disabled = true;
+    let savedBytes = 0, changed = 0;
+    for(let i = 0; i < targets.length; i++){
+      const t = targets[i];
+      btn.textContent = `壓縮中…（${i + 1}／${targets.length}）`;
+      const oldUrl = t.owner.images[t.idx];
+      const newUrl = await recompressDataUrl(oldUrl);
+      if(newUrl && newUrl.length < oldUrl.length){
+        savedBytes += Math.round((oldUrl.length - newUrl.length) * 0.75);
+        t.owner.images[t.idx] = newUrl;
+        changed++;
+      }
+    }
+    (state.products || []).forEach(p => { p.image = p.images[0] || ""; });
+    (state.composites || []).forEach(c => { c.image = c.images[0] || ""; });
+    btn.disabled = false;
+    btn.textContent = "重新壓縮所有已上傳的照片";
+    renderProducts(); renderComboList(); renderPricing(); renderDashboard(); renderStore();
+    persist();
+    showToast(changed > 0
+      ? `已檢查 ${targets.length} 張，${changed} 張變小了，共省下約 ${Math.round(savedBytes / 1024)}KB。`
+      : `已檢查 ${targets.length} 張，目前都已經是最佳化過的大小了。`, 5000);
   }
 
   /* ---------- render: storefront ---------- */
@@ -5732,6 +5779,7 @@
       showToast("設定已儲存。");
     };
     document.getElementById("setImageMode").onchange = updateImageModeHint;
+    document.getElementById("btnRecompressImages").onclick = recompressAllImages;
     document.getElementById("setWholesaleStock").onchange = updateWholesaleStockHint;
     document.getElementById("brandHome").onclick = () => { if(!isOwner()) switchView("store"); };
     document.getElementById("btnBackToStoreTop").onclick = () => switchView("store");
