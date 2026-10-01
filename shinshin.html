@@ -2315,7 +2315,12 @@
         const canvas = document.createElement("canvas");
         canvas.width = width; canvas.height = height;
         canvas.getContext("2d").drawImage(img, 0, 0, width, height);
-        try{ cb(canvas.toDataURL("image/jpeg", 0.82)); }
+        try{
+          // WebP 同畫質下通常比 JPEG 小 25～35%；少數瀏覽器不支援編碼會靜靜退回 PNG（很大），
+          // 所以編完先檢查真的是 webp 才採用，不是的話改用原本的 JPEG。
+          const webp = canvas.toDataURL("image/webp", 0.8);
+          cb(webp.indexOf("data:image/webp") === 0 ? webp : canvas.toDataURL("image/jpeg", 0.82));
+        }
         catch(e){ cb(reader.result); }
       };
       img.onerror = () => cb(reader.result);
@@ -4157,11 +4162,12 @@
     const el = document.getElementById("imageModeHint");
     if(!el) return;
     const v = document.getElementById("setImageMode").value;
+    const cloudNote = (FB.enabled && FB.isOwner) ? "有接雲端同步：所有商品的照片共用同一份 1MB 額度，上傳照片的商品建議控制在幾張就好，其餘可以改貼網址。" : "";
     el.textContent = v === "0"
-      ? "原圖會直接存進資料裡：畫質最好，但每張可能 2～8MB。瀏覽器本機儲存約 5MB 上限，只放得下 1～2 張，很快會存不下、匯出檔也會超大。大量原圖建議改用圖片空間（貼網址）或後端。"
+      ? "原圖會直接存進資料裡：畫質最好，但每張可能 2～8MB。瀏覽器本機儲存約 5MB 上限，只放得下 1～2 張，很快會存不下、匯出檔也會超大。大量原圖建議改用圖片空間（貼網址）或後端。" + (cloudNote ? " " + cloudNote : "")
       : v === "1600"
-      ? "每張約 200～500KB，本機大概放得下 15～30 張。"
-      : "每張約 60～150KB，本機大概放得下 40～80 張（建議值）。";
+      ? "已自動用 WebP 壓縮，每張約 150～350KB，本機大概放得下 15～30 張。" + (cloudNote ? " " + cloudNote : "")
+      : "已自動用 WebP 壓縮，每張約 40～100KB，本機大概放得下 40～80 張（建議值）。" + (cloudNote ? " " + cloudNote : "");
   }
 
   function updateWholesaleStockHint(){
