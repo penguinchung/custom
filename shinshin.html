@@ -1230,7 +1230,7 @@
           <input type="number" id="setFreeShipThreshold" min="0" value="3000" style="width:100px;">
         </div>
         <div class="field"><label>滿額時黑貓運費折抵金額</label>
-          <input type="number" id="setTakkyuDiscountAtThreshold" min="0" value="40" style="width:100px;">
+          <input type="number" id="setTakkyuDiscountAtThreshold" min="0" value="50" style="width:100px;">
         </div>
       </div>
       <p class="muted" id="freeShipHint" style="margin-top:-6px; margin-bottom:14px;"></p>
@@ -4293,7 +4293,7 @@
     set("setFeeTakkyuNormal", o.feeTakkyuNormal != null ? o.feeTakkyuNormal : 170);
     set("setFeeTakkyuLarge", o.feeTakkyuLarge != null ? o.feeTakkyuLarge : 250);
     set("setFreeShipThreshold", o.freeShipThreshold != null ? o.freeShipThreshold : 3000);
-    set("setTakkyuDiscountAtThreshold", o.takkyuDiscountAtThreshold != null ? o.takkyuDiscountAtThreshold : 40);
+    set("setTakkyuDiscountAtThreshold", o.takkyuDiscountAtThreshold != null ? o.takkyuDiscountAtThreshold : 50);
     updateFreeShipHint();
     set("setDueDays", Number(o.dueDays) || 3);
     set("setBank", pay.bank || "");
@@ -5601,7 +5601,7 @@
     if(!st.storefront) st.storefront = { heroTitle:"", heroSubtitle:"" };
     if(st.storefront.imageMaxDim == null) st.storefront.imageMaxDim = 900;
     if(st.storefront.showStockToWholesale == null) st.storefront.showStockToWholesale = true;
-    if(!st.storefront.ordering) st.storefront.ordering = { enabled:true, dueDays:3, seven:true, takkyu:true, feeSeven:38, feeTakkyuNormal:170, feeTakkyuLarge:250, freeShipThreshold:3000, takkyuDiscountAtThreshold:40 };
+    if(!st.storefront.ordering) st.storefront.ordering = { enabled:true, dueDays:3, seven:true, takkyu:true, feeSeven:38, feeTakkyuNormal:170, feeTakkyuLarge:250, freeShipThreshold:3000, takkyuDiscountAtThreshold:50 };
     else {
       const o = st.storefront.ordering;
       if(o.enabled == null) o.enabled = true;
@@ -5612,7 +5612,7 @@
       if(o.feeTakkyuNormal == null) o.feeTakkyuNormal = (o.feeTakkyu != null ? o.feeTakkyu : 170);
       if(o.feeTakkyuLarge == null) o.feeTakkyuLarge = 250;
       if(o.freeShipThreshold == null) o.freeShipThreshold = 3000;
-      if(o.takkyuDiscountAtThreshold == null) o.takkyuDiscountAtThreshold = 40;
+      if(o.takkyuDiscountAtThreshold == null) o.takkyuDiscountAtThreshold = 50;
       delete o.feeTakkyu;
     }
     if(!st.storefront.payment) st.storefront.payment = { bank:"", acctName:"", acctNo:"", note:"" };
