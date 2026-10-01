@@ -378,7 +378,6 @@
     .grid3{grid-template-columns:1fr;}
     .cards{grid-template-columns:repeat(2,1fr);}
     .store-grid{grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px;}
-    header.top{flex-direction:column;}
   }
 
   /* ---------- 開機中：資料還沒載入前，不要露出任何管理畫面 ---------- */
@@ -1226,6 +1225,15 @@
           <input type="number" id="setFeeTakkyuLarge" min="0" value="250" style="width:100px;">
         </div>
       </div>
+      <div class="grid2">
+        <div class="field"><label>滿額優惠運費門檻（0＝不啟用）</label>
+          <input type="number" id="setFreeShipThreshold" min="0" value="3000" style="width:100px;">
+        </div>
+        <div class="field"><label>滿額時黑貓運費折抵金額</label>
+          <input type="number" id="setTakkyuDiscountAtThreshold" min="0" value="40" style="width:100px;">
+        </div>
+      </div>
+      <p class="muted" id="freeShipHint" style="margin-top:-6px; margin-bottom:14px;"></p>
       <div class="field"><label>下單後幾天內要完成匯款（逾期訂單視為取消）</label>
         <input type="number" id="setDueDays" min="1" value="3" style="width:100px;">
       </div>
@@ -2882,8 +2890,17 @@
       ? (Number(o.feeTakkyuLarge != null ? o.feeTakkyuLarge : 250) || 0)
       : (Number(o.feeTakkyuNormal != null ? o.feeTakkyuNormal : 170) || 0);
   }
-  function shippingFeeFor(method, size){
-    return method === "takkyu" ? feeTakkyu(size) : feeSeven();
+  function shippingFeeFor(method, size, subtotal){
+    const o = (state.storefront && state.storefront.ordering) || {};
+    const threshold = Number(o.freeShipThreshold) || 0;
+    const metThreshold = threshold > 0 && Number(subtotal) >= threshold;
+    if(method === "takkyu"){
+      const base = feeTakkyu(size);
+      if(!metThreshold) return base;
+      const discount = Number(o.takkyuDiscountAtThreshold) || 0;
+      return Math.max(0, base - discount);
+    }
+    return metThreshold ? 0 : feeSeven();
   }
   function takkyuSizeLabel(size){ return size === "large" ? "大箱" : "一般"; }
   /* 訂單／購物車顯示用的配送文字（含黑貓尺寸） */
@@ -2968,7 +2985,7 @@
     });
 
     const sub = cartSubtotal(role);
-    const fee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize);
+    const fee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize, sub);
     document.getElementById("cartSubtotalShow").textContent = "$" + fmt(sub);
     document.getElementById("cartShipLabel").textContent = "運費（"
       + (checkoutMethod === "takkyu" ? "黑貓宅配・" + takkyuSizeLabel(checkoutTakkyuSize) : "7-11 店到店") + "）";
@@ -2990,10 +3007,11 @@
     if(checkoutMethod === "711" && !seven && takkyu) checkoutMethod = "takkyu";
     if(checkoutMethod === "takkyu" && !takkyu && seven) checkoutMethod = "711";
 
+    const sub = cartSubtotal(role);
     const group = document.getElementById("coMethodGroup");
     const btns = [];
-    if(seven) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='711'?'active':''}" data-method="711">7-11 店到店（運費 $${fmt(feeSeven())}）</button>`);
-    if(takkyu) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='takkyu'?'active':''}" data-method="takkyu">黑貓宅配（一般 $${fmt(feeTakkyu("normal"))} / 大箱 $${fmt(feeTakkyu("large"))}）</button>`);
+    if(seven) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='711'?'active':''}" data-method="711">7-11 店到店（運費 $${fmt(shippingFeeFor("711", null, sub))}）</button>`);
+    if(takkyu) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='takkyu'?'active':''}" data-method="takkyu">黑貓宅配（一般 $${fmt(shippingFeeFor("takkyu", "normal", sub))} / 大箱 $${fmt(shippingFeeFor("takkyu", "large", sub))}）</button>`);
     if(btns.length === 0) btns.push(`<span class="muted">賣家目前未開放任何配送方式</span>`);
     group.innerHTML = btns.join("");
     group.querySelectorAll("[data-method]").forEach(b => b.onclick = () => {
@@ -3007,8 +3025,8 @@
     if(checkoutMethod === "takkyu"){
       sizeField.style.display = "block";
       sizeGroup.innerHTML = [
-        `<button type="button" class="seg-btn ${checkoutTakkyuSize==='normal'?'active':''}" data-size="normal">一般（$${fmt(feeTakkyu("normal"))}）</button>`,
-        `<button type="button" class="seg-btn ${checkoutTakkyuSize==='large'?'active':''}" data-size="large">大箱（$${fmt(feeTakkyu("large"))}）</button>`
+        `<button type="button" class="seg-btn ${checkoutTakkyuSize==='normal'?'active':''}" data-size="normal">一般（$${fmt(shippingFeeFor("takkyu", "normal", sub))}）</button>`,
+        `<button type="button" class="seg-btn ${checkoutTakkyuSize==='large'?'active':''}" data-size="large">大箱（$${fmt(shippingFeeFor("takkyu", "large", sub))}）</button>`
       ].join("");
       sizeGroup.querySelectorAll("[data-size]").forEach(b => b.onclick = () => {
         checkoutTakkyuSize = b.dataset.size;
@@ -3074,7 +3092,7 @@
     if(over){ hint.textContent = `「${over.name}」庫存只剩 ${fmt(over.max)}，請調整數量。`; return; }
 
     const subtotal = lines.reduce((s,l) => s + l.unitPrice * l.qty, 0);
-    const shippingFee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize);
+    const shippingFee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize, subtotal);
     const order = {
       id: FB.enabled ? Date.now() : (state.nextOrderId || ((state.orders||[]).length + 1)),
       no: orderNo(),
@@ -4274,6 +4292,9 @@
     set("setFeeSeven", o.feeSeven != null ? o.feeSeven : 38);
     set("setFeeTakkyuNormal", o.feeTakkyuNormal != null ? o.feeTakkyuNormal : 170);
     set("setFeeTakkyuLarge", o.feeTakkyuLarge != null ? o.feeTakkyuLarge : 250);
+    set("setFreeShipThreshold", o.freeShipThreshold != null ? o.freeShipThreshold : 3000);
+    set("setTakkyuDiscountAtThreshold", o.takkyuDiscountAtThreshold != null ? o.takkyuDiscountAtThreshold : 40);
+    updateFreeShipHint();
     set("setDueDays", Number(o.dueDays) || 3);
     set("setBank", pay.bank || "");
     set("setAcctName", pay.acctName || "");
@@ -4299,6 +4320,15 @@
     el.textContent = document.getElementById("setWholesaleStock").value === "1"
       ? "批發客會看到每項的實際庫存數字。提醒：接雲端後，任何看得到店面的人都能從網路看到這些數字，不只批發客。"
       : "批發客只看到「現貨／缺貨」，看不到實際數量（成本一樣看不到）。";
+  }
+  function updateFreeShipHint(){
+    const el = document.getElementById("freeShipHint");
+    if(!el) return;
+    const threshold = Number(document.getElementById("setFreeShipThreshold").value) || 0;
+    const discount = Number(document.getElementById("setTakkyuDiscountAtThreshold").value) || 0;
+    el.textContent = threshold > 0
+      ? `商品小計滿 $${fmt(threshold)}：選 7-11 免運費；選黑貓宅配折抵 $${fmt(discount)} 運費。留 0 代表不啟用這個優惠。`
+      : "目前沒有啟用滿額運費優惠。";
   }
 
   /* ---------- product form (standalone, in 新增商品／分類／供應商 tab) ---------- */
@@ -5571,7 +5601,7 @@
     if(!st.storefront) st.storefront = { heroTitle:"", heroSubtitle:"" };
     if(st.storefront.imageMaxDim == null) st.storefront.imageMaxDim = 900;
     if(st.storefront.showStockToWholesale == null) st.storefront.showStockToWholesale = true;
-    if(!st.storefront.ordering) st.storefront.ordering = { enabled:true, dueDays:3, seven:true, takkyu:true, feeSeven:38, feeTakkyuNormal:170, feeTakkyuLarge:250 };
+    if(!st.storefront.ordering) st.storefront.ordering = { enabled:true, dueDays:3, seven:true, takkyu:true, feeSeven:38, feeTakkyuNormal:170, feeTakkyuLarge:250, freeShipThreshold:3000, takkyuDiscountAtThreshold:40 };
     else {
       const o = st.storefront.ordering;
       if(o.enabled == null) o.enabled = true;
@@ -5581,6 +5611,8 @@
       if(o.feeSeven == null) o.feeSeven = 38;
       if(o.feeTakkyuNormal == null) o.feeTakkyuNormal = (o.feeTakkyu != null ? o.feeTakkyu : 170);
       if(o.feeTakkyuLarge == null) o.feeTakkyuLarge = 250;
+      if(o.freeShipThreshold == null) o.freeShipThreshold = 3000;
+      if(o.takkyuDiscountAtThreshold == null) o.takkyuDiscountAtThreshold = 40;
       delete o.feeTakkyu;
     }
     if(!st.storefront.payment) st.storefront.payment = { bank:"", acctName:"", acctNo:"", note:"" };
@@ -5730,6 +5762,8 @@
     document.getElementById("btnOrderModalClose").onclick = () => document.getElementById("orderModalOverlay").classList.remove("active");
     document.getElementById("btnOrderModalSave").onclick = saveManualOrder;
 
+    document.getElementById("setFreeShipThreshold").addEventListener("input", updateFreeShipHint);
+    document.getElementById("setTakkyuDiscountAtThreshold").addEventListener("input", updateFreeShipHint);
     document.getElementById("btnSaveOrderSettings").onclick = () => {
       state.storefront = state.storefront || {};
       state.storefront.ordering = {
@@ -5739,6 +5773,8 @@
         feeSeven: Math.max(0, Number(document.getElementById("setFeeSeven").value) || 0),
         feeTakkyuNormal: Math.max(0, Number(document.getElementById("setFeeTakkyuNormal").value) || 0),
         feeTakkyuLarge: Math.max(0, Number(document.getElementById("setFeeTakkyuLarge").value) || 0),
+        freeShipThreshold: Math.max(0, Number(document.getElementById("setFreeShipThreshold").value) || 0),
+        takkyuDiscountAtThreshold: Math.max(0, Number(document.getElementById("setTakkyuDiscountAtThreshold").value) || 0),
         dueDays: Math.max(1, Number(document.getElementById("setDueDays").value) || 3)
       };
       state.storefront.payment = {
