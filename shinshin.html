@@ -212,6 +212,7 @@
   .promo-chip b{display:block; font-size:13px; color:var(--ink);}
   .promo-chip .days{color:var(--danger); font-weight:700;}
 
+  .store-search{width:100%; margin-bottom:12px; padding:10px 14px; border-radius:99px; font-size:14px;}
   .store-filters{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
   .store-cat-btn{
     border:1px solid var(--border); background:var(--surface); color:var(--ink-soft);
@@ -475,6 +476,7 @@
       <div class="promo-items" id="promoStripItems"></div>
     </div>
 
+    <input type="text" id="storeSearch" class="store-search" placeholder="🔍 搜尋商品名稱、分類" autocomplete="off" enterkeyhint="search">
     <div class="store-filters" id="storeCatFilters"></div>
     <div class="store-grid" id="storeGrid"></div>
     <p class="empty" id="storeEmpty" style="display:none;">目前沒有上架的商品。</p>
@@ -2466,6 +2468,7 @@
 
   /* ---------- render: storefront ---------- */
   let storeCat = "";
+  let storeQuery = "";
 
   function renderStore(){
     const role = storeViewRole();
@@ -2517,11 +2520,20 @@
     let combos = (state.composites || []).filter(c => isListed(c));
     if(storeCat) combos = []; // 組合商品不綁單一分類
 
+    const q = storeQuery.trim().toLowerCase();
+    if(q){
+      const hit = (...fields) => fields.some(f => String(f || "").toLowerCase().includes(q));
+      prods = prods.filter(p => hit(p.name, p.category, p.intro));
+      combos = combos.filter(c => hit(c.name, "組合", c.intro));
+    }
+
     const cards = [];
     combos.forEach(c => cards.push(comboCardHtml(c, role)));
     prods.forEach(p => cards.push(productCardHtml(p, role)));
 
-    document.getElementById("storeEmpty").style.display = cards.length ? "none" : "block";
+    const emptyEl = document.getElementById("storeEmpty");
+    emptyEl.textContent = q ? `找不到符合「${storeQuery.trim()}」的商品。` : "目前沒有上架的商品。";
+    emptyEl.style.display = cards.length ? "none" : "block";
     grid.innerHTML = cards.join("");
     grid.querySelectorAll("[data-add-cart]").forEach(b => b.onclick = () => {
       const [kind, refId] = b.dataset.addCart.split(":");
@@ -5752,6 +5764,10 @@
     /* ----- cart / checkout / orders wiring ----- */
     document.getElementById("cartFab").onclick = () => { switchView("cart"); renderCart(); window.scrollTo(0,0); };
     document.getElementById("btnBackToStore").onclick = () => { switchView("store"); };
+    const storeSearchEl = document.getElementById("storeSearch");
+    const applyStoreSearch = () => { storeQuery = storeSearchEl.value; renderStore(); };
+    storeSearchEl.addEventListener("input", e => { if(!e.isComposing) applyStoreSearch(); });
+    storeSearchEl.addEventListener("compositionend", applyStoreSearch);
     document.getElementById("btnClearBuyer").onclick = (e) => { e.preventDefault(); clearBuyer(); };
     document.getElementById("btnPlaceOrder").onclick = placeOrder;
     document.getElementById("btnCopySlip").onclick = () => {
