@@ -2054,14 +2054,15 @@
       // 沒有對應的新格式紀錄：保留原本就有的 images/image（例如還沒搬過去的舊格式資料）
     });
   }
-  async function fetchAndMergeImages(st){
-    const [prodMap, comboMap] = await Promise.all([
-      fbLoadImagesMap("productImages"),
-      fbLoadImagesMap("comboImages")
-    ]);
+  function fbLoadAllImageMaps(){
+    return Promise.all([fbLoadImagesMap("productImages"), fbLoadImagesMap("comboImages")]);
+  }
+  async function fetchAndMergeImages(st, mapsPromise){
+    const [prodMap, comboMap] = await (mapsPromise || fbLoadAllImageMaps());
     mergeImagesInto(st.products, prodMap);
     mergeImagesInto(st.composites, comboMap);
   }
+  let imagesPending = false;
   async function fbDeleteProductImages(id){
     if(!(FB.enabled && FB.isOwner)) return;
     try{ await FB.db.collection("productImages").doc(String(id)).delete(); }
@@ -2639,7 +2640,7 @@
     const cover = list[0] || "";
     const inner = cover
       ? `<img class="ph" src="${cover}" alt="" loading="lazy" onerror="this.classList.add('placeholder');this.removeAttribute('src');this.textContent='圖片載入失敗';">`
-      : `<div class="ph placeholder">尚無照片</div>`;
+      : `<div class="ph placeholder">${imagesPending ? "照片載入中…" : "尚無照片"}</div>`;
     const countBadge = list.length > 1 ? `<span class="gallery-count-badge">1／${list.length}</span>` : "";
     const openAttr = (kind && refId != null) ? ` data-open-detail="${kind}:${refId}"` : "";
     return `<div class="ph-wrap"${openAttr}>${badge || ""}${inner}${countBadge}</div>`;
@@ -5724,9 +5725,12 @@
     if(FB.enabled){
       // 有上次的店面快取 → 直接秒開；同時在背景抓最新的，有變才更新畫面
       const cached = readPublicCache();
-      const fetchFresh = fbLoadDoc("shop/public").then(async pub => {
+      // 照片（每個商品各一份文件）和文字資料同時開始抓，不要等文字資料回來才開始
+      const imgMapsPromise = fbLoadAllImageMaps();
+      const fetchMeta = fbLoadDoc("shop/public");
+      const fetchFresh = fetchMeta.then(async pub => {
         if(pub && pub.products){
-          await fetchAndMergeImages(pub);
+          await fetchAndMergeImages(pub, imgMapsPromise);
           FB._pub = pub;
           writePublicCache(pub);
           if(FB._authResolved && !FB.isOwner && pub.updatedAt !== FB._appliedStamp) refreshPublicView(pub);
@@ -5737,9 +5741,18 @@
         FB._pub = cached;
         usePublicDoc(cached);
       } else {
-        const pub = await fetchFresh;
+        // 第一次來（沒有快取）：文字資料一到就先顯示商品，照片等下載完再補上，不要讓客人乾等整包照片
+        const pub = await fetchMeta;
         if(pub && pub.products){
+          imagesPending = true;
           usePublicDoc(pub);
+          fetchFresh.then(full => {
+            imagesPending = false;
+            if(full && full.products && state._customerView){
+              refreshPublicView(full);
+              if(detailKind && document.getElementById("galleryOverlay").classList.contains("active")) openDetail(detailKind, detailRefId);
+            }
+          });
         } else {
           // 雲端還沒資料 → 先用本機/範例，等老闆登入後上傳
           await loadLocalInto();
