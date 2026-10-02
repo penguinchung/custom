@@ -1364,7 +1364,10 @@
     </div>
     <div class="gallery-footer">
       <span class="muted" id="galleryCounter"></span>
-      <button class="btn small" id="galleryCloseBtn">關閉</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn small" id="galleryShareBtn">🔗 分享</button>
+        <button class="btn small" id="galleryCloseBtn">關閉</button>
+      </div>
     </div>
     <p class="gallery-intro" id="galleryIntro" style="display:none;"></p>
     <a class="detail-link" id="galleryDetailLink" target="_blank" rel="noopener" style="display:none;">看完整介紹 →</a>
@@ -2652,6 +2655,15 @@
     renderGalleryStage();
     updateDetailCartButton();
     document.getElementById("galleryOverlay").classList.add("active");
+  }
+  /* 分享連結：?p=商品id 或 ?c=組合id，打開連結時自動跳出那個商品的介紹視窗 */
+  function shareUrlFor(kind, id){
+    return location.origin + location.pathname + "?" + (kind === "combo" ? "c" : "p") + "=" + id;
+  }
+  function openDetailFromUrl(){
+    const params = new URLSearchParams(location.search);
+    if(params.has("p")) openDetail("product", params.get("p"));
+    else if(params.has("c")) openDetail("combo", params.get("c"));
   }
   function refreshDetailOptionsIfOpen(kind, id){
     if(!document.getElementById("galleryOverlay").classList.contains("active")) return;
@@ -5731,6 +5743,7 @@
     renderAll();
     applyAccessUI();
     switchView(isOwner() ? "dashboard" : "store");
+    if(!isOwner()) openDetailFromUrl();
     if(!FB.enabled) finishBoot(); // 雲端模式：等登入狀態確認後才放出畫面（避免老闆先看到店面再跳儀表板）
 
     document.querySelectorAll(".tab-btn").forEach(b => b.onclick = () => switchView(b.dataset.view));
@@ -6003,6 +6016,20 @@
     document.getElementById("galleryCloseBtn").onclick = closeGallery;
     document.getElementById("galleryOverlay").onclick = e => {
       if(e.target.id === "galleryOverlay") closeGallery();
+    };
+    document.getElementById("galleryShareBtn").onclick = () => {
+      if(!detailKind || detailRefId == null) return;
+      const list = detailKind === "combo" ? (state.composites || []) : state.products;
+      const item = list.find(x => x.id === detailRefId);
+      const url = shareUrlFor(detailKind, detailRefId);
+      if(navigator.share){
+        navigator.share({ title: item ? item.name : (state.storeName || "商品"), url }).catch(() => {});
+        return;
+      }
+      const done = () => showToast("商品連結已複製，可以貼給客人。");
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(url).then(done, () => fallbackCopy(url, done));
+      } else fallbackCopy(url, done);
     };
     document.getElementById("galleryAddCartBtn").onclick = () => {
       if(!detailKind || detailRefId == null) return;
