@@ -1949,7 +1949,21 @@
 
   /* 客人看得到的投影：不含成本、供應商、帳目、交易紀錄。
      庫存數量預設也不含（只給 inStock 布林）；老闆若開「批發客看庫存」才會附上 qty。 */
-  function buildPublicDoc(){
+  /* 商品卡的封面：上傳的照片用小縮圖（thumb），貼網址的照片直接用網址（image）；
+     完整相簿放在 productImages/comboImages，客人點進商品才抓。 */
+  function coverFields(item, thumbKey, thumbs){
+    const imgs = itemImages(item);
+    const cover = imgs[0] || "";
+    const out = { imageCount: imgs.length };
+    if(cover.indexOf("data:") === 0){
+      const t = thumbs && thumbs[thumbKey];
+      if(t) out.thumb = t;
+    } else if(cover){
+      out.image = cover;
+    }
+    return out;
+  }
+  function buildPublicDoc(thumbs){
     const sf = state.storefront || {};
     const shareStock = !!sf.showStockToWholesale;
     return {
@@ -1974,7 +1988,8 @@
           options: p.options || [],
           retailPrice: Number(p.retailPrice) || 0, wholesalePrice: Number(p.wholesalePrice) || 0,
           listed: true, promo: p.promo || null,
-          inStock: (Number(p.qty) || 0) > 0
+          inStock: (Number(p.qty) || 0) > 0,
+          ...coverFields(p, "p:" + p.id, thumbs)
         };
         if(shareStock){ row.qty = Number(p.qty) || 0; row.threshold = Number(p.threshold) || 0; }
         return row;
@@ -1985,7 +2000,8 @@
           options: c.options || [],
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
-          canMake: comboBuildable(c) > 0
+          canMake: comboBuildable(c) > 0,
+          ...coverFields(c, "c:" + c.id, thumbs)
         };
         if(shareStock) row.buildable = comboBuildable(c);
         return row;
@@ -2045,12 +2061,19 @@
       return map;
     }catch(e){ console.error("[Firebase] 讀取照片失敗 " + collectionName + "：", e); return {}; }
   }
-  function mergeImagesInto(items, imagesMap){
+  /* 一組照片的「指紋」（長度＋頭尾片段），用來判斷跟雲端上那份是不是同一份。
+     老闆存檔時，沒變的照片就不重傳，不然每改一次價格都要把幾 MB 照片再上傳一遍。 */
+  function imagesSig(images){
+    return (images || []).map(u => u.length + ":" + u.slice(0, 40) + u.slice(-40)).join("|");
+  }
+  const imgSigs = {};
+  function mergeImagesInto(items, imagesMap, prefix){
     (items || []).forEach(item => {
       const rec = imagesMap[String(item.id)];
       if(rec && Array.isArray(rec.images) && rec.images.length){
         item.images = rec.images;
         item.image = item.images[0] || "";
+        if(prefix) imgSigs[prefix + item.id] = imagesSig(rec.images);
       }
       // 沒有對應的新格式紀錄：保留原本就有的 images/image（例如還沒搬過去的舊格式資料）
     });
@@ -2060,18 +2083,76 @@
   }
   async function fetchAndMergeImages(st, mapsPromise){
     const [prodMap, comboMap] = await (mapsPromise || fbLoadAllImageMaps());
-    mergeImagesInto(st.products, prodMap);
-    mergeImagesInto(st.composites, comboMap);
+    mergeImagesInto(st.products, prodMap, "p:");
+    mergeImagesInto(st.composites, comboMap, "c:");
   }
   let imagesPending = false;
+
+  /* 舊格式的公開資料（還沒有縮圖、沒有 imageCount）才需要一次抓全部照片；
+     新格式只抓縮圖，完整相簿等客人點進商品再抓。 */
+  function needsBulkImages(pub){
+    return (pub.products || []).concat(pub.composites || []).some(r => r.imageCount === undefined);
+  }
+
+  /* 客人點進商品才抓完整相簿（每個商品一份文件）；失敗不記，下次點還會再試 */
+  const fullImagesCache = {};
+  function loadFullImages(kind, id){
+    const key = kind + ":" + id;
+    if(fullImagesCache[key]) return fullImagesCache[key];
+    const p = fbLoadDoc((kind === "combo" ? "comboImages/" : "productImages/") + id)
+      .then(rec => (rec && Array.isArray(rec.images)) ? rec.images : []);
+    fullImagesCache[key] = p;
+    p.then(imgs => { if(!imgs.length) delete fullImagesCache[key]; });
+    return p;
+  }
+
+  /* 老闆存檔時替每個上架商品的封面做小縮圖（放在 shop/public，客人首頁只載入這個） */
+  const thumbCache = new Map();
+  function makeThumb(src, maxDim){
+    return new Promise(resolve => {
+      const key = maxDim + "@" + src;
+      if(thumbCache.has(key)){ resolve(thumbCache.get(key)); return; }
+      const img = new Image();
+      img.onload = () => {
+        const s = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * s)), h = Math.max(1, Math.round(img.naturalHeight * s));
+        const canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+        let out = "";
+        try{
+          out = canvas.toDataURL("image/webp", 0.7);
+          if(out.indexOf("data:image/webp") !== 0) out = canvas.toDataURL("image/jpeg", 0.7);
+        }catch(e){ out = ""; }
+        thumbCache.set(key, out);
+        resolve(out);
+      };
+      img.onerror = () => resolve("");
+      img.src = src;
+    });
+  }
+  async function buildThumbs(products, composites){
+    const listed = products.filter(p => p.listed !== false).length + composites.filter(c => c.listed !== false).length;
+    const dim = listed > 45 ? 240 : 360;
+    const thumbs = {};
+    const jobs = [];
+    products.forEach(p => { if(p.listed !== false) jobs.push(["p:" + p.id, itemImages(p)[0] || ""]); });
+    composites.forEach(c => { if(c.listed !== false) jobs.push(["c:" + c.id, itemImages(c)[0] || ""]); });
+    for(const [key, cover] of jobs){
+      if(cover.indexOf("data:") !== 0) continue;
+      const t = await makeThumb(cover, dim);
+      if(t) thumbs[key] = t;
+    }
+    return thumbs;
+  }
   async function fbDeleteProductImages(id){
     if(!(FB.enabled && FB.isOwner)) return;
-    try{ await FB.db.collection("productImages").doc(String(id)).delete(); }
+    try{ await FB.db.collection("productImages").doc(String(id)).delete(); delete imgSigs["p:" + id]; }
     catch(e){ console.error("[Firebase] 刪除商品照片失敗：", e); }
   }
   async function fbDeleteComboImages(id){
     if(!(FB.enabled && FB.isOwner)) return;
-    try{ await FB.db.collection("comboImages").doc(String(id)).delete(); }
+    try{ await FB.db.collection("comboImages").doc(String(id)).delete(); delete imgSigs["c:" + id]; }
     catch(e){ console.error("[Firebase] 刪除組合照片失敗：", e); }
   }
 
@@ -2175,8 +2256,18 @@
     }
     try{
       const { products, composites, ...metaRest } = state;
-      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString() };
-      const pubMeta = buildPublicDoc();
+      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 1 };
+      const thumbs = await buildThumbs(products, composites);
+      const pubMeta = buildPublicDoc(thumbs);
+      // 縮圖放在 shop/public，商品非常多時別撐爆 1MB：超過就從最後面的商品開始拿掉縮圖
+      let pubSize = JSON.stringify(pubMeta).length;
+      if(pubSize > 900000){
+        const rows = pubMeta.products.concat(pubMeta.composites);
+        for(let i = rows.length - 1; i >= 0 && pubSize > 900000; i--){
+          if(rows[i].thumb){ pubSize -= rows[i].thumb.length; delete rows[i].thumb; }
+        }
+        showToast("商品很多，部分商品的首頁縮圖沒有同步，客人點進商品才看得到照片。", 6000);
+      }
       // 文字資料（名稱/價格/庫存…）兩份一起存——批次寫入是「全部成功或全部失敗」，
       // 但這兩份已經不含照片，正常不會太大，所以綁在一起沒問題。
       await fbCommitInChunks([
@@ -2186,11 +2277,13 @@
       // 照片一定要「每個商品各自獨立送出」，不能跟上面合併成同一批次：
       // 批次寫入只要有一筆超過 1MB 就會整批失敗，等於一項商品的照片太大會拖累其他商品全部同步不了，
       // 完全違背「拆開存放」的目的，所以這裡改用個別送出＋各自抓錯誤，彼此不互相影響。
+      // 照片跟雲端上那份一樣（指紋沒變）就不重傳，只送有改動的
       const imageWrites = [
-        ...products.map(p => ({ ref: FB.db.collection("productImages").doc(String(p.id)), data: { images: itemImages(p) }, name: p.name })),
-        ...composites.map(c => ({ ref: FB.db.collection("comboImages").doc(String(c.id)), data: { images: itemImages(c) }, name: c.name }))
-      ];
+        ...products.map(p => ({ key: "p:" + p.id, ref: FB.db.collection("productImages").doc(String(p.id)), data: { images: itemImages(p) }, name: p.name })),
+        ...composites.map(c => ({ key: "c:" + c.id, ref: FB.db.collection("comboImages").doc(String(c.id)), data: { images: itemImages(c) }, name: c.name }))
+      ].map(w => ({ ...w, sig: imagesSig(w.data.images) })).filter(w => imgSigs[w.key] !== w.sig);
       const results = await Promise.allSettled(imageWrites.map(w => w.ref.set(w.data)));
+      results.forEach((r, i) => { if(r.status === "fulfilled") imgSigs[imageWrites[i].key] = imageWrites[i].sig; });
       const failedNames = results.map((r, i) => r.status === "rejected" ? imageWrites[i].name : null).filter(Boolean);
       FB.firstRun = false;
       updateCloudUploadBtn();
@@ -2636,13 +2729,19 @@
     return entries.map(([k,v]) => `${k} ${v}`).join("／");
   }
 
-  function photoHtml(images, badge, kind, refId){
-    const list = Array.isArray(images) ? images.filter(Boolean) : (images ? [images] : []);
-    const cover = list[0] || "";
+  /* 商品卡用的封面與張數：客人端首頁只有縮圖（thumb）和張數（imageCount），完整照片點進去才載入 */
+  function itemCover(item){
+    return item.thumb || itemImages(item)[0] || "";
+  }
+  function itemImageCount(item){
+    return item.imageCount != null ? item.imageCount : itemImages(item).length;
+  }
+
+  function photoHtml(cover, count, badge, kind, refId){
     const inner = cover
       ? `<img class="ph" src="${cover}" alt="" loading="lazy" onerror="this.classList.add('placeholder');this.removeAttribute('src');this.textContent='圖片載入失敗';">`
-      : `<div class="ph placeholder">${imagesPending ? "照片載入中…" : "尚無照片"}</div>`;
-    const countBadge = list.length > 1 ? `<span class="gallery-count-badge">1／${list.length}</span>` : "";
+      : `<div class="ph placeholder">${imagesPending ? "照片載入中…" : (count > 0 ? "點開看照片" : "尚無照片")}</div>`;
+    const countBadge = count > 1 ? `<span class="gallery-count-badge">1／${count}</span>` : "";
     const openAttr = (kind && refId != null) ? ` data-open-detail="${kind}:${refId}"` : "";
     return `<div class="ph-wrap"${openAttr}>${badge || ""}${inner}${countBadge}</div>`;
   }
@@ -2657,7 +2756,8 @@
     if(!item) return;
     detailKind = kind;
     detailRefId = item.id;
-    galleryImages = itemImages(item);
+    const galleryFor = it => { const imgs = itemImages(it); if(imgs.length) return imgs; const cv = itemCover(it); return cv ? [cv] : []; };
+    galleryImages = galleryFor(item);
     galleryIndex = 0;
     document.getElementById("galleryTitle").textContent = item.name;
     const introEl = document.getElementById("galleryIntro");
@@ -2670,6 +2770,18 @@
     renderGalleryStage();
     updateDetailCartButton();
     document.getElementById("galleryOverlay").classList.add("active");
+    // 首頁只載入了縮圖：先用縮圖頂著，完整相簿抓回來再換上
+    const have = Array.isArray(item.images) ? item.images.length : 0;
+    if(FB.enabled && item.imageCount > have){
+      document.getElementById("galleryCounter").textContent = "載入完整照片中…";
+      loadFullImages(kind, item.id).then(imgs => {
+        if(imgs.length){ item.images = imgs; item.image = imgs[0]; }
+        if(detailKind === kind && detailRefId === item.id && document.getElementById("galleryOverlay").classList.contains("active")){
+          galleryImages = galleryFor(item);
+          renderGalleryStage();
+        }
+      });
+    }
   }
   /* 分享連結：?p=商品id 或 ?c=組合id，打開連結時自動跳出那個商品的介紹視窗 */
   function shareUrlFor(kind, id){
@@ -2746,7 +2858,7 @@
     const promoUntil = pv.kind === "promo"
       ? `<span class="promo-until">優惠到 ${pv.end}（剩 ${Math.max(0, daysBetween(todayStr(), pv.end))} 天）</span>` : "";
     return `<div class="product-card">
-      ${photoHtml(itemImages(p), null, "product", p.id)}
+      ${photoHtml(itemCover(p), itemImageCount(p), null, "product", p.id)}
       <div class="body">
         <div class="pname" data-open-detail="product:${p.id}">${p.name}</div>
         <div class="pcat">${p.category || ""}</div>
@@ -2768,7 +2880,7 @@
     const promoUntil = pv.kind === "promo"
       ? `<span class="promo-until">優惠到 ${pv.end}（剩 ${Math.max(0, daysBetween(todayStr(), pv.end))} 天）</span>` : "";
     return `<div class="product-card">
-      ${photoHtml(itemImages(c), `<span class="card-combo-badge">組合</span>`, "combo", c.id)}
+      ${photoHtml(itemCover(c), itemImageCount(c), `<span class="card-combo-badge">組合</span>`, "combo", c.id)}
       <div class="body">
         <div class="pname" data-open-detail="combo:${c.id}">${c.name}</div>
         <div class="pcat">組合商品</div>
@@ -2886,13 +2998,13 @@
         const c = (state.composites||[]).find(x => x.id === i.refId);
         if(!c || !isListed(c)){ removeSilently(i); return; }
         const pv = comboPriceView(c, role === "owner" ? "retail" : role);
-        lines.push({ uid:i.uid, kind:"combo", refId:c.id, name:c.name, image:c.image, qty:i.qty, note:i.note || "", options:i.options || {},
+        lines.push({ uid:i.uid, kind:"combo", refId:c.id, name:c.name, image:itemCover(c), qty:i.qty, note:i.note || "", options:i.options || {},
                      unitPrice:pv.price, promo:pv.kind === "promo", max:comboBuildable(c) });
       } else {
         const p = state.products.find(x => x.id === i.refId);
         if(!p || !isListed(p)){ removeSilently(i); return; }
         const pv = productPriceView(p, role === "owner" ? "retail" : role);
-        lines.push({ uid:i.uid, kind:"product", refId:p.id, name:p.name, image:p.image, qty:i.qty, note:i.note || "", options:i.options || {},
+        lines.push({ uid:i.uid, kind:"product", refId:p.id, name:p.name, image:itemCover(p), qty:i.qty, note:i.note || "", options:i.options || {},
                      unitPrice:pv.price, promo:pv.kind === "promo", max:p.qty, unit:p.unit });
       }
     });
@@ -5726,12 +5838,11 @@
     if(FB.enabled){
       // 有上次的店面快取 → 直接秒開；同時在背景抓最新的，有變才更新畫面
       const cached = readPublicCache();
-      // 照片（每個商品各一份文件）和文字資料同時開始抓，不要等文字資料回來才開始
-      const imgMapsPromise = fbLoadAllImageMaps();
       const fetchMeta = fbLoadDoc("shop/public");
       const fetchFresh = fetchMeta.then(async pub => {
         if(pub && pub.products){
-          await fetchAndMergeImages(pub, imgMapsPromise);
+          // 新格式只有縮圖，不用再抓照片；舊格式（還沒有縮圖）才一次抓全部
+          if(needsBulkImages(pub)) await fetchAndMergeImages(pub);
           FB._pub = pub;
           writePublicCache(pub);
           if(FB._authResolved && !FB.isOwner && pub.updatedAt !== FB._appliedStamp) refreshPublicView(pub);
@@ -5742,12 +5853,13 @@
         FB._pub = cached;
         usePublicDoc(cached);
       } else {
-        // 第一次來（沒有快取）：文字資料一到就先顯示商品，照片等下載完再補上，不要讓客人乾等整包照片
+        // 第一次來（沒有快取）：文字資料一到就先顯示商品；舊格式的照片等下載完再補上
         const pub = await fetchMeta;
         if(pub && pub.products){
-          imagesPending = true;
+          const bulk = needsBulkImages(pub);
+          imagesPending = bulk;
           usePublicDoc(pub);
-          fetchFresh.then(full => {
+          if(bulk) fetchFresh.then(full => {
             imagesPending = false;
             if(full && full.products && state._customerView){
               refreshPublicView(full);
@@ -6265,6 +6377,8 @@
           showToast(FB.firstRun
             ? "已登入。雲端還沒資料，請按右上角「☁ 上傳目前資料到雲端」。"
             : "已登入老闆模式，雲端同步中。");
+          // 雲端公開資料還是舊格式（沒有首頁縮圖）：登入後自動補存一次，之後客人首頁就只載入縮圖
+          if(!FB.firstRun && state._thumbsV !== 1) fbQueueSave();
         } else {
           fbUnsubscribeOrders();
           FB.firstRun = false;
@@ -6276,7 +6390,7 @@
             // 登出後重新載入店面
             const pub = await fbLoadDoc("shop/public");
             if(pub && pub.products){
-              await fetchAndMergeImages(pub);
+              if(needsBulkImages(pub)) await fetchAndMergeImages(pub);
               FB._pub = pub; writePublicCache(pub); usePublicDoc(pub);
             }
             else { await loadLocalInto(); migrateStorefront(state); applyTheme(state.theme); }
