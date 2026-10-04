@@ -2528,6 +2528,65 @@
     reader.readAsDataURL(file);
   }
 
+  /* 每個商品／組合的照片存在同一份雲端文件，Firestore 單份上限 1MB，
+     所以一個商品的上傳照片總量要控制在預算內。張數越多，每張自動壓得越小
+     （先降畫質，還是太大再縮小尺寸），20 張也放得下；只處理超過分配額度的照片，
+     本來就夠小的不動，貼網址的照片不佔容量。 */
+  const PHOTO_BUDGET = 880000;
+  function loadImageEl(src){
+    return new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  }
+  function encodeCanvas(canvas, q){
+    let out = canvas.toDataURL("image/webp", q);
+    if(out.indexOf("data:image/webp") !== 0) out = canvas.toDataURL("image/jpeg", q);
+    return out;
+  }
+  async function shrinkDataUri(src, targetLen){
+    const img = await loadImageEl(src);
+    if(!img) return src;
+    const longSide = Math.max(img.naturalWidth, img.naturalHeight);
+    // 先用「目標大小／原大小」估一個合理的起始尺寸，少繞幾輪
+    let dim = Math.max(Math.min(360, longSide), Math.round(longSide * Math.min(1, Math.sqrt(targetLen / src.length) * 1.5))), canvas = null;
+    for(let round = 0; round < 8; round++){
+      const s = Math.min(1, dim / longSide);
+      canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * s));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * s));
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      let best = encodeCanvas(canvas, 0.35);
+      if(best.length > targetLen){ dim = Math.round(dim * 0.8); continue; }
+      let lo = 0.35, hi = 0.82;
+      for(let k = 0; k < 5; k++){
+        const q = (lo + hi) / 2, out = encodeCanvas(canvas, q);
+        if(out.length <= targetLen){ best = out; lo = q; } else hi = q;
+      }
+      return best;
+    }
+    return encodeCanvas(canvas, 0.35);
+  }
+  function photoUsagePct(arr){
+    const used = arr.reduce((s, u) => s + (u && u.indexOf("data:") === 0 ? u.length : 0), 0);
+    return Math.round(used / PHOTO_BUDGET * 100);
+  }
+  async function fitPhotosToBudget(arr, onProgress){
+    const dataIdx = arr.map((u, i) => u.indexOf("data:") === 0 ? i : -1).filter(i => i >= 0);
+    if(!dataIdx.length) return false;
+    const urlLen = arr.reduce((s, u) => s + (u.indexOf("data:") === 0 ? 0 : u.length), 0);
+    const budget = PHOTO_BUDGET - urlLen - 200;
+    const total = () => dataIdx.reduce((s, i) => s + arr[i].length, 0);
+    let changed = false;
+    for(let pass = 0; pass < 3 && total() > budget; pass++){
+      const target = Math.floor(budget / dataIdx.length * Math.pow(0.85, pass));
+      for(const i of dataIdx){
+        if(arr[i].length > target){
+          arr[i] = await shrinkDataUri(arr[i], target); changed = true;
+          if(onProgress) onProgress();
+        }
+      }
+    }
+    return changed;
+  }
+
   /* 「重新壓縮所有已上傳的照片」：把每項商品/組合裡「上傳（data:）」的照片，
      用目前的壓縮設定（含新的 WebP 轉檔）重新處理一次；貼網址的照片不受影響。
      只有新檔案真的變小才會換掉，避免極少數情況下重新轉檔反而變大。 */
@@ -4501,7 +4560,7 @@
   function renderProductImageList(){
     document.getElementById("pImageList").innerHTML = imageManagerHtml(pendingProductImages, "p");
     document.getElementById("pImageHint").textContent = pendingProductImages.length
-      ? `已加入 ${pendingProductImages.length}／20 張，第 1 張會顯示在店面卡片上。若有雲端同步且未開通 Storage，建議以照片網址為主，上傳照片會佔用同步資料的容量。`
+      ? `已加入 ${pendingProductImages.length}／20 張，第 1 張會顯示在店面卡片上。上傳的照片約佔單一商品容量的 ${photoUsagePct(pendingProductImages)}%，張數多時會自動降低畫質；貼網址的照片不佔容量。`
       : "尚未加入照片，店面會顯示「尚無照片」。";
   }
 
@@ -4611,7 +4670,7 @@
     updateProductMarginHint();
   }
 
-  function saveProduct(){
+  async function saveProduct(){
     const id = document.getElementById("editProductId").value;
     const name = document.getElementById("pName").value.trim();
     if(!name){ showToast("請輸入商品名稱"); return; }
@@ -4623,6 +4682,7 @@
     if(typedUrl && pendingProductImages.length < 20 && !pendingProductImages.includes(typedUrl)){
       pendingProductImages.push(typedUrl);
     }
+    await fitPhotosToBudget(pendingProductImages);
     const images = pendingProductImages.slice(0, 20);
     const image = images[0] || "";
     const pp = Number(document.getElementById("pPromoPrice").value) || 0;
@@ -5166,7 +5226,7 @@
   function renderComboImageList(){
     document.getElementById("comboImageList").innerHTML = imageManagerHtml(pendingComboImages, "combo");
     document.getElementById("comboImageHint").textContent = pendingComboImages.length
-      ? `已加入 ${pendingComboImages.length}／20 張，第 1 張會顯示在店面卡片上。若有雲端同步且未開通 Storage，建議以照片網址為主，上傳照片會佔用同步資料的容量。`
+      ? `已加入 ${pendingComboImages.length}／20 張，第 1 張會顯示在店面卡片上。上傳的照片約佔單一組合容量的 ${photoUsagePct(pendingComboImages)}%，張數多時會自動降低畫質；貼網址的照片不佔容量。`
       : "尚未加入照片，店面會顯示「尚無照片」。";
   }
   let pendingComboOptions = [];
@@ -5292,7 +5352,7 @@
     });
   }
 
-  function saveCombo(){
+  async function saveCombo(){
     const id = document.getElementById("editComboId").value;
     const name = document.getElementById("comboName").value.trim();
     const price = Number(document.getElementById("comboPrice").value) || 0;
@@ -5320,6 +5380,7 @@
     if(typedComboUrl && pendingComboImages.length < 20 && !pendingComboImages.includes(typedComboUrl)){
       pendingComboImages.push(typedComboUrl);
     }
+    await fitPhotosToBudget(pendingComboImages);
     const comboImages = pendingComboImages.slice(0, 20);
     const data = {
       name, price, recipe,
@@ -6079,6 +6140,10 @@
           if(done === toProcess.length){
             results.forEach(r => arr.push(r));
             rerender();
+            if(photoUsagePct(arr) > 100) showToast("照片比較多，正在自動壓縮畫質讓它們都放得下，請稍等…", 5000);
+            fitPhotosToBudget(arr, rerender).then(changed => {
+              if(changed){ rerender(); showToast("已自動降低畫質，所有照片都放得下了。"); }
+            });
           }
         });
       });
