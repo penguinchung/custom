@@ -2236,6 +2236,8 @@
   }
   /* Firestore 單一批次最多 500 筆寫入，這裡切成小批次依序送出，
      商品數量正常不會超過 1 批，純粹是防呆。 */
+  function byteSize(obj){ return new TextEncoder().encode(JSON.stringify(obj)).length; }
+  let fbLastPrivBytes = 0, fbPrivWarned = false;
   async function fbCommitInChunks(writes){
     const chunkSize = 450;
     for(let i = 0; i < writes.length; i += chunkSize){
@@ -2257,10 +2259,17 @@
     try{
       const { products, composites, ...metaRest } = state;
       const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 1 };
+      // Firestore 單份文件上限 1MB（以 UTF-8 位元組算，中文一字 3 bytes）。
+      // 商品資料＋進出貨／支出紀錄都放在 shop/private，紀錄會一直累積，快滿時提早提醒。
+      fbLastPrivBytes = byteSize(privMeta);
+      if(fbLastPrivBytes > 700000 && !fbPrivWarned){
+        fbPrivWarned = true;
+        showToast(`雲端資料已用到單份上限的約 ${Math.round(fbLastPrivBytes / 1048576 * 100)}%（多半是進出貨、支出紀錄累積）。快滿時存檔會失敗，建議先用「匯出資料」備份。`, 9000);
+      }
       const thumbs = await buildThumbs(products, composites);
       const pubMeta = buildPublicDoc(thumbs);
       // 縮圖放在 shop/public，商品非常多時別撐爆 1MB：超過就從最後面的商品開始拿掉縮圖
-      let pubSize = JSON.stringify(pubMeta).length;
+      let pubSize = byteSize(pubMeta);
       if(pubSize > 900000){
         const rows = pubMeta.products.concat(pubMeta.composites);
         for(let i = rows.length - 1; i >= 0 && pubSize > 900000; i--){
@@ -2296,7 +2305,8 @@
       }
     }catch(e){
       console.error("[Firebase] 儲存到雲端失敗：", e);
-      fbLastErrorMsg = "雲端儲存失敗：" + (e.code || e.message);
+      fbLastErrorMsg = "雲端儲存失敗：" + (e.code || e.message)
+        + (fbLastPrivBytes > 900000 ? "（資料量已接近單份上限 1MB，多半是進出貨、支出紀錄累積，請先匯出資料備份）" : "");
       showToast(fbLastErrorMsg, 4000);
       fbSyncState = "error";
     }
