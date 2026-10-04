@@ -213,7 +213,9 @@
   .promo-chip b{display:block; font-size:13px; color:var(--ink);}
   .promo-chip .days{color:var(--danger); font-weight:700;}
 
-  .store-search{width:100%; margin-bottom:12px; padding:10px 14px; border-radius:99px; font-size:14px;}
+  .store-tools{display:flex; gap:8px; margin-bottom:12px;}
+  .store-search{flex:1; min-width:0; padding:10px 14px; border-radius:99px; font-size:14px;}
+  .store-sort{flex:0 0 auto; width:auto; max-width:42%; padding:10px 12px; border-radius:99px; font-size:14px;}
   .store-filters{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;}
   .store-cat-btn{
     border:1px solid var(--border); background:var(--surface); color:var(--ink-soft);
@@ -477,7 +479,16 @@
       <div class="promo-items" id="promoStripItems"></div>
     </div>
 
-    <input type="text" id="storeSearch" class="store-search" placeholder="🔍 搜尋商品名稱、分類" autocomplete="off" enterkeyhint="search">
+    <div class="store-tools">
+      <input type="text" id="storeSearch" class="store-search" placeholder="🔍 搜尋商品名稱、分類" autocomplete="off" enterkeyhint="search">
+      <select id="storeSort" class="store-sort" aria-label="商品排序">
+        <option value="default">排序：預設</option>
+        <option value="newest">最新上架</option>
+        <option value="priceAsc">價格低到高</option>
+        <option value="priceDesc">價格高到低</option>
+        <option value="name">名稱</option>
+      </select>
+    </div>
     <div class="store-filters" id="storeCatFilters"></div>
     <div class="store-grid" id="storeGrid"></div>
     <p class="empty" id="storeEmpty" style="display:none;">目前沒有上架的商品。</p>
@@ -1988,7 +1999,7 @@
           options: p.options || [],
           retailPrice: Number(p.retailPrice) || 0, wholesalePrice: Number(p.wholesalePrice) || 0,
           listed: true, promo: p.promo || null,
-          inStock: (Number(p.qty) || 0) > 0,
+          inStock: (Number(p.qty) || 0) > 0, createdAt: p.createdAt || 0,
           ...coverFields(p, "p:" + p.id, thumbs)
         };
         if(shareStock){ row.qty = Number(p.qty) || 0; row.threshold = Number(p.threshold) || 0; }
@@ -2000,7 +2011,7 @@
           options: c.options || [],
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
-          canMake: comboBuildable(c) > 0,
+          canMake: comboBuildable(c) > 0, createdAt: c.createdAt || 0,
           ...coverFields(c, "c:" + c.id, thumbs)
         };
         if(shareStock) row.buildable = comboBuildable(c);
@@ -2633,6 +2644,7 @@
   /* ---------- render: storefront ---------- */
   let storeCat = "";
   let storeQuery = "";
+  let storeSort = "default";
 
   function renderStore(){
     const role = storeViewRole();
@@ -2691,9 +2703,26 @@
       combos = combos.filter(c => hit(c.name, "組合", c.intro));
     }
 
-    const cards = [];
-    combos.forEach(c => cards.push(comboCardHtml(c, role)));
-    prods.forEach(p => cards.push(productCardHtml(p, role)));
+    const entries = [];
+    combos.forEach(c => entries.push({ kind: "combo", item: c }));
+    prods.forEach(p => entries.push({ kind: "product", item: p }));
+    if(storeSort !== "default"){
+      const eff = role === "owner" ? "retail" : role;
+      const priceOf = e => e.kind === "combo" ? comboPriceView(e.item, eff).price : productPriceView(e.item, eff).price;
+      const priceCmp = dir => (a, b) => {
+        const pa = priceOf(a), pb = priceOf(b);
+        if(!pa && !pb) return 0;
+        if(!pa) return 1;          // 沒標價的排最後
+        if(!pb) return -1;
+        return dir * (pa - pb);
+      };
+      const cmp = storeSort === "newest" ? (a, b) => ((b.item.createdAt || 0) - (a.item.createdAt || 0)) || (b.item.id - a.item.id) || (a.kind === "combo" ? -1 : 1)
+        : storeSort === "priceAsc" ? priceCmp(1)
+        : storeSort === "priceDesc" ? priceCmp(-1)
+        : (a, b) => String(a.item.name).localeCompare(String(b.item.name), "zh-Hant");
+      entries.sort(cmp);
+    }
+    const cards = entries.map(e => e.kind === "combo" ? comboCardHtml(e.item, role) : productCardHtml(e.item, role));
 
     const emptyEl = document.getElementById("storeEmpty");
     emptyEl.textContent = q ? `找不到符合「${storeQuery.trim()}」的商品。` : "目前沒有上架的商品。";
@@ -4713,7 +4742,7 @@
       Object.assign(p, data);
       showToast("已更新商品：" + name);
     } else {
-      state.products.push({ id: state.nextProductId++, ...data });
+      state.products.push({ id: state.nextProductId++, createdAt: Date.now(), ...data });
       showToast("已新增商品：" + name);
     }
     const returnView = productFormReturnView;
@@ -4829,6 +4858,7 @@
     validRows.forEach(r => {
       state.products.push({
         id: state.nextProductId++,
+        createdAt: Date.now(),
         name: r.name.trim(),
         barcode: "",
         image: "",
@@ -5095,6 +5125,7 @@
       }
       state.products.push({
         id: state.nextProductId++,
+        createdAt: Date.now(),
         name: r.name,
         barcode: r.barcode || "",
         image: "",
@@ -5397,7 +5428,7 @@
       Object.assign(c, data);
       showToast("已更新組合商品：" + name);
     } else {
-      state.composites.push({ id: state.nextCompositeId++, ...data });
+      state.composites.push({ id: state.nextCompositeId++, createdAt: Date.now(), ...data });
       showToast("已新增組合商品：" + name);
     }
     resetComboForm();
@@ -5965,6 +5996,7 @@
     const applyStoreSearch = () => { storeQuery = storeSearchEl.value; renderStore(); };
     storeSearchEl.addEventListener("input", e => { if(!e.isComposing) applyStoreSearch(); });
     storeSearchEl.addEventListener("compositionend", applyStoreSearch);
+    document.getElementById("storeSort").onchange = e => { storeSort = e.target.value; renderStore(); };
     document.getElementById("btnClearBuyer").onclick = (e) => { e.preventDefault(); clearBuyer(); };
     document.getElementById("btnPlaceOrder").onclick = placeOrder;
     document.getElementById("btnCopySlip").onclick = () => {
