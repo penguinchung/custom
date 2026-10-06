@@ -2106,13 +2106,27 @@
 
   /* 客人點進商品才抓完整相簿（每個商品一份文件）；失敗不記，下次點還會再試 */
   const fullImagesCache = {};
+  /* 網路不穩讀取失敗時自動再試一次；仍失敗就丟錯誤（呼叫端顯示「載入失敗，點此重試」），
+     失敗結果不留在快取裡，不然這個商品要重新整理頁面才救得回來。 */
   function loadFullImages(kind, id){
     const key = kind + ":" + id;
     if(fullImagesCache[key]) return fullImagesCache[key];
-    const p = fbLoadDoc((kind === "combo" ? "comboImages/" : "productImages/") + id)
-      .then(rec => (rec && Array.isArray(rec.images)) ? rec.images : []);
+    const path = (kind === "combo" ? "comboImages/" : "productImages/") + id;
+    const p = (async () => {
+      for(let attempt = 0; ; attempt++){
+        try{
+          const s = await FB.db.doc(path).get();
+          const rec = s.exists ? s.data() : null;
+          return (rec && Array.isArray(rec.images)) ? rec.images : [];
+        }catch(e){
+          console.error("[Firebase] 讀取相簿失敗 " + path + "：", e);
+          if(attempt >= 1) throw e;
+          await new Promise(r => setTimeout(r, 1200));
+        }
+      }
+    })();
     fullImagesCache[key] = p;
-    p.then(imgs => { if(!imgs.length) delete fullImagesCache[key]; });
+    p.then(imgs => { if(!imgs.length) delete fullImagesCache[key]; }, () => { delete fullImagesCache[key]; });
     return p;
   }
 
@@ -2875,16 +2889,32 @@
     updateDetailCartButton();
     document.getElementById("galleryOverlay").classList.add("active");
     // 首頁只載入了縮圖：先用縮圖頂著，完整相簿抓回來再換上
+    const noImgEl = document.getElementById("galleryNoImage");
+    noImgEl.textContent = "尚無照片";
+    noImgEl.style.cursor = "";
+    noImgEl.onclick = null;
     const have = Array.isArray(item.images) ? item.images.length : 0;
     if(FB.enabled && item.imageCount > have){
-      document.getElementById("galleryCounter").textContent = "載入完整照片中…";
-      loadFullImages(kind, item.id).then(imgs => {
-        if(imgs.length){ item.images = imgs; item.image = imgs[0]; }
-        if(detailKind === kind && detailRefId === item.id && document.getElementById("galleryOverlay").classList.contains("active")){
+      const stillOpen = () => detailKind === kind && detailRefId === item.id && document.getElementById("galleryOverlay").classList.contains("active");
+      const fetchAlbum = () => {
+        document.getElementById("galleryCounter").textContent = "載入完整照片中…";
+        if(!galleryImages.length){ noImgEl.textContent = "照片載入中…"; noImgEl.style.cursor = ""; noImgEl.onclick = null; }
+        loadFullImages(kind, item.id).then(imgs => {
+          if(imgs.length){ item.images = imgs; item.image = imgs[0]; }
+          if(!stillOpen()) return;
           galleryImages = galleryFor(item);
           renderGalleryStage();
-        }
-      });
+        }, () => {
+          if(!stillOpen()) return;
+          document.getElementById("galleryCounter").textContent = galleryImages.length ? "完整照片載入失敗" : "";
+          if(!galleryImages.length){
+            noImgEl.textContent = "照片載入失敗，點這裡重試";
+            noImgEl.style.cursor = "pointer";
+            noImgEl.onclick = fetchAlbum;
+          }
+        });
+      };
+      fetchAlbum();
     }
   }
   /* 分享連結：?p=商品id 或 ?c=組合id，打開連結時自動跳出那個商品的介紹視窗 */
