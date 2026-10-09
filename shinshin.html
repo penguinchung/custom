@@ -506,7 +506,7 @@
       <div id="cartTotalBox" style="display:none;">
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span>商品小計</span><span id="cartSubtotalShow">$0</span></div>
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span id="cartShipLabel">運費</span><span id="cartShipShow">$0</span></div>
-        <div class="cart-total-row" id="cartDiscountRow" style="font-weight:400; font-size:13.5px; display:none;"><span id="cartDiscountLabel">賣貨便優惠</span><span id="cartDiscountShow">-$0</span></div>
+        <div class="cart-total-row" id="cartDiscountRow" style="font-weight:400; font-size:13.5px; display:none;"><span id="cartDiscountLabel">設立賣貨便</span><span id="cartDiscountShow">-$0</span></div>
         <div class="cart-total-row"><span>應付總額</span><span id="cartTotal">$0</span></div>
         <p class="muted" id="cartPickupNote" style="display:none; margin:8px 0 0; font-size:12.5px; line-height:1.7;"></p>
       </div>
@@ -3483,7 +3483,7 @@
     lines.push("商品小計：$" + fmt(orderSubtotal(order)));
     lines.push("運費（" + methodText(order).replace(/（|）/g, m => m === "（" ? "‧" : "") + "）：$" + fmt(orderShipping(order)));
     const disc = Number(order.discount) || 0;
-    if(disc > 0) lines.push("賣貨便優惠：-$" + fmt(disc));
+    if(disc > 0) lines.push("設立賣貨便：-$" + fmt(disc));
     lines.push("應付總額：$" + fmt(order.total));
     if(disc > 0) sevenPickupNoteLines(disc).forEach(l => lines.push(l));
     if(order.note) lines.push("備註：" + order.note);
@@ -3602,7 +3602,7 @@
         <td>${o.customerName}<div class="muted">${o.phone}</div>${o.role === "wholesale" && o.customerId ? `<div class="muted">ID：${o.customerId}</div>` : ""}</td>
         <td>${o.role === "wholesale" ? "批發客" : "一般客"}</td>
         <td class="muted" style="white-space:normal; max-width:220px;">${itemsTxt}</td>
-        <td class="qty">$${fmt(o.total)}<div class="muted">含運 $${fmt(orderShipping(o))}${Number(o.discount) > 0 ? "，優惠 -$" + fmt(o.discount) : ""}</div></td>
+        <td class="qty">$${fmt(o.total)}<div class="muted">含運 $${fmt(orderShipping(o))}${Number(o.discount) > 0 ? "，設立賣貨便 -$" + fmt(o.discount) : ""}</div></td>
         <td>${methodText(o)}<div class="muted">${o.dest || ""}</div>${o.elevenSelfNumber ? `<div class="muted">自行配號</div>` : ""}</td>
         <td class="${orderOverdue(o) ? "" : "muted"}" style="${orderOverdue(o) ? "color:var(--danger); font-weight:700;" : ""}">${o.status === "pending" ? fmtDateTime(due) : "—"}</td>
         <td>${orderStatusTag(o)}</td>
