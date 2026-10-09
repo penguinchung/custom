@@ -5902,6 +5902,24 @@
     }
   }
 
+  /* 之前用全形逗號（，）或頓號（、）輸入的選項會被當成「一個」很長的選項，這裡自動拆開。
+     有拆過就記起來，老闆登入／單機載入後會順便存回去。 */
+  let optionsSplitFixed = false;
+  function splitOptionChoices(items){
+    (items || []).forEach(it => {
+      (it.options || []).forEach(g => {
+        if(!Array.isArray(g.choices)) return;
+        if(!g.choices.some(c => /[,，、]/.test(c))) return;
+        const seen = new Set();
+        g.choices = g.choices
+          .flatMap(c => String(c).split(/[,，、]/))
+          .map(s => s.trim())
+          .filter(s => s && !seen.has(s) && seen.add(s));
+        optionsSplitFixed = true;
+      });
+    });
+  }
+
   /* 舊版備份／舊版 localStorage 資料補上店面相關欄位，避免缺欄位造成錯誤 */
   function migrateStorefront(st){
     if(!st.storefront) st.storefront = { heroTitle:"", heroSubtitle:"" };
@@ -5952,6 +5970,8 @@
       if(c.listed == null) c.listed = true;
       if(!("promo" in c)) c.promo = null;
     });
+    splitOptionChoices(st.products);
+    splitOptionChoices(st.composites);
   }
 
   /* 把本機 localStorage（或範例）資料載入 state — 單機模式、以及雲端還沒資料時的起點 */
@@ -6040,6 +6060,7 @@
       }
     } else {
       await loadLocalInto();
+      if(optionsSplitFixed){ optionsSplitFixed = false; persist(); }
     }
 
     loadCart();
@@ -6550,7 +6571,8 @@
             ? "已登入。雲端還沒資料，請按右上角「☁ 上傳目前資料到雲端」。"
             : "已登入老闆模式，雲端同步中。");
           // 雲端公開資料還是舊格式（沒有首頁縮圖）：登入後自動補存一次，之後客人首頁就只載入縮圖
-          if(!FB.firstRun && state._thumbsV !== 2) fbQueueSave();
+          // 選項用全形逗號打的、剛被自動拆開，也順便存回雲端
+          if(!FB.firstRun && (state._thumbsV !== 2 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
         } else {
           fbUnsubscribeOrders();
           FB.firstRun = false;
