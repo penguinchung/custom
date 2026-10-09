@@ -280,6 +280,13 @@
     position:absolute; top:8px; left:8px; background:var(--primary); color:#fff;
     font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:99px;
   }
+  .card-pre-badge{
+    position:absolute; top:8px; left:8px; background:var(--amber); color:#fff;
+    font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:99px;
+  }
+  .card-combo-badge + .card-pre-badge{left:58px;}
+  .product-card .stock-line.pre{color:var(--amber);}
+  .gallery-pre{font-size:13px; font-weight:700; color:var(--amber); margin:6px 0 2px;}
   .product-card .ph-wrap{position:relative;}
 
   /* ---------- pricing / promo admin table ---------- */
@@ -480,6 +487,11 @@
 
     <div class="store-tools">
       <input type="text" id="storeSearch" class="store-search" placeholder="🔍 搜尋商品名稱、分類" autocomplete="off" enterkeyhint="search">
+      <select id="storeKind" class="store-sort" aria-label="現貨或預購">
+        <option value="">全部商品</option>
+        <option value="stock">只看現貨</option>
+        <option value="preorder">只看預購</option>
+      </select>
       <select id="storeSort" class="store-sort" aria-label="商品排序">
         <option value="default">排序：預設</option>
         <option value="newest">最新上架</option>
@@ -508,6 +520,7 @@
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span id="cartShipLabel">運費</span><span id="cartShipShow">$0</span></div>
         <div class="cart-total-row" id="cartDiscountRow" style="font-weight:400; font-size:13.5px; display:none;"><span id="cartDiscountLabel">設立賣貨便</span><span id="cartDiscountShow">-$0</span></div>
         <div class="cart-total-row"><span>應付總額</span><span id="cartTotal">$0</span></div>
+        <p id="cartPreorderNote" style="display:none; margin:8px 0 0; font-size:12.5px; line-height:1.7; color:var(--amber); font-weight:700;"></p>
         <p class="muted" id="cartPickupNote" style="display:none; margin:8px 0 0; font-size:12.5px; line-height:1.7;"></p>
       </div>
       <button class="btn" id="btnBackToStoreBottom" style="margin-top:14px;">← 再去逛逛，加購其他商品</button>
@@ -860,6 +873,20 @@
         <div id="comboImageList"></div>
         <p class="muted" id="comboImageHint" style="margin-top:4px;"></p>
       </div>
+      <div class="grid2" style="margin-top:12px;">
+        <div class="field">
+          <label>販售方式</label>
+          <select id="comboSaleMode">
+            <option value="">自動（名稱有「預購」就當預購）</option>
+            <option value="stock">現貨</option>
+            <option value="preorder">預購</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>預計到貨日（預購才需要，選填）</label>
+          <input type="text" id="comboPreorderEta" placeholder="例如：10/25 或 十月底">
+        </div>
+      </div>
       <div class="field" style="margin-top:12px;">
         <label>組合簡介（選填，客人點商品會跳出視窗看到）</label>
         <textarea id="comboIntro" rows="3" placeholder="材質、內容物、搭配方式等簡短說明"></textarea>
@@ -955,6 +982,20 @@
         </div>
         <div id="pImageList"></div>
         <p class="muted" id="pImageHint" style="margin-top:4px;"></p>
+      </div>
+      <div class="grid2" style="margin-top:12px;">
+        <div class="field">
+          <label>販售方式</label>
+          <select id="pSaleMode">
+            <option value="">自動（名稱有「預購」就當預購）</option>
+            <option value="stock">現貨</option>
+            <option value="preorder">預購</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>預計到貨日（預購才需要，選填）</label>
+          <input type="text" id="pPreorderEta" placeholder="例如：10/25 或 十月底">
+        </div>
       </div>
       <div class="field" style="margin-top:12px;">
         <label>商品簡介（選填，客人點商品會跳出視窗看到）</label>
@@ -1385,6 +1426,7 @@
         <button class="btn small" id="galleryCloseBtn">關閉</button>
       </div>
     </div>
+    <div class="gallery-pre" id="galleryPreorder" style="display:none;"></div>
     <p class="gallery-intro" id="galleryIntro" style="display:none;"></p>
     <a class="detail-link" id="galleryDetailLink" target="_blank" rel="noopener" style="display:none;">看完整介紹 →</a>
     <div id="galleryOptions"></div>
@@ -1998,6 +2040,7 @@
           id: p.id, name: p.name, category: p.category || "", unit: p.unit || "件",
           intro: p.intro || "", detailUrl: p.detailUrl || "",
           options: p.options || [],
+          saleMode: p.saleMode || "", preorderEta: p.preorderEta || "",
           retailPrice: Number(p.retailPrice) || 0, wholesalePrice: Number(p.wholesalePrice) || 0,
           listed: true, promo: p.promo || null,
           inStock: (Number(p.qty) || 0) > 0, createdAt: p.createdAt || 0,
@@ -2010,6 +2053,7 @@
         const row = {
           id: c.id, name: c.name, intro: c.intro || "", detailUrl: c.detailUrl || "",
           options: c.options || [],
+          saleMode: c.saleMode || "", preorderEta: c.preorderEta || "",
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
           canMake: comboBuildable(c) > 0, createdAt: c.createdAt || 0,
@@ -2667,6 +2711,7 @@
   let storeCat = "";
   let storeQuery = "";
   let storeSort = "default";
+  let storeKind = ""; // "" 全部｜"stock" 現貨｜"preorder" 預購
 
   function renderStore(){
     const role = storeViewRole();
@@ -2718,6 +2763,12 @@
     let combos = (state.composites || []).filter(c => isListed(c));
     if(storeCat) combos = []; // 組合商品不綁單一分類
 
+    if(storeKind){
+      const want = storeKind === "preorder";
+      prods = prods.filter(p => isPreorder(p) === want);
+      combos = combos.filter(c => isPreorder(c) === want);
+    }
+
     const q = storeQuery.trim().toLowerCase();
     if(q){
       const hit = (...fields) => fields.some(f => String(f || "").toLowerCase().includes(q));
@@ -2747,7 +2798,8 @@
     const cards = entries.map(e => e.kind === "combo" ? comboCardHtml(e.item, role) : productCardHtml(e.item, role));
 
     const emptyEl = document.getElementById("storeEmpty");
-    emptyEl.textContent = q ? `找不到符合「${storeQuery.trim()}」的商品。` : "目前沒有上架的商品。";
+    emptyEl.textContent = q ? `找不到符合「${storeQuery.trim()}」的商品。`
+      : storeKind === "preorder" ? "目前沒有預購商品。" : storeKind === "stock" ? "目前沒有現貨商品。" : "目前沒有上架的商品。";
     emptyEl.style.display = cards.length ? "none" : "block";
     grid.innerHTML = cards.join("");
     grid.querySelectorAll("[data-add-cart]").forEach(b => b.onclick = () => {
@@ -2777,7 +2829,24 @@
     return min === Infinity ? 0 : min;
   }
 
+  /* 預購商品：設定裡選「預購」，或沒特別設定（自動）但商品名稱裡有「預購」兩個字。
+     設定選「現貨」可強制當成現貨（例如名稱剛好有預購字樣）。 */
+  function isPreorder(item){
+    if(!item) return false;
+    if(item.saleMode === "preorder") return true;
+    if(item.saleMode === "stock") return false;
+    return /預購/.test(item.name || "");
+  }
+  function preorderLineText(item){
+    const eta = String(item.preorderEta || "").trim();
+    return "預購商品" + (eta ? "・預計 " + eta + " 到貨" : "");
+  }
   function stockLineHtml(item, isCombo, viewRole){
+    if(!isPreorder(item)) return stockLineCore(item, isCombo, viewRole);
+    const line = `<div class="stock-line pre">${preorderLineText(item)}</div>`;
+    return viewRole === "owner" ? line + stockLineCore(item, isCombo, viewRole) : line;
+  }
+  function stockLineCore(item, isCombo, viewRole){
     if(viewRole === "owner"){
       if(isCombo) return `<div class="stock-line ${comboBuildable(item)<=0?"out":"in"}">可做約 ${fmt(comboBuildable(item))} 份</div>
               <div class="owner-cost">成本估 $${fmt(Math.round(computeComboCost(item)*100)/100)}</div>`;
@@ -2808,11 +2877,12 @@
   function availableQty(kind, refId){
     if(kind === "combo"){
       const c = (state.composites||[]).find(x => x.id === refId);
-      return c ? comboBuildable(c) : 0;
+      return c ? (isPreorder(c) ? PREORDER_MAX_QTY : comboBuildable(c)) : 0;
     }
     const p = state.products.find(x => x.id === refId);
-    return p ? p.qty : 0;
+    return p ? (isPreorder(p) ? PREORDER_MAX_QTY : p.qty) : 0;
   }
+  const PREORDER_MAX_QTY = 99; // 預購不看庫存，單品項一次最多訂 99 件，避免誤觸
 
   function itemImages(item){
     if(Array.isArray(item.images) && item.images.length) return item.images.filter(Boolean);
@@ -2887,6 +2957,9 @@
     const u = safeUrl(item.detailUrl);
     if(u){ link.href = u; link.style.display = "inline-block"; } else { link.style.display = "none"; }
     document.getElementById("galleryOptions").innerHTML = optionPickerHtml(item, kind);
+    const preEl = document.getElementById("galleryPreorder");
+    preEl.textContent = isPreorder(item) ? preorderLineText(item) + "，到貨後再一起寄出" : "";
+    preEl.style.display = isPreorder(item) ? "block" : "none";
     renderGalleryStage();
     updateDetailCartButton();
     document.getElementById("galleryOverlay").classList.add("active");
@@ -2953,10 +3026,11 @@
     const item = list.find(x => x.id === detailRefId);
     if(!item){ btn.style.display = "none"; return; }
     const pv = detailKind === "combo" ? comboPriceView(item, role) : productPriceView(item, role);
-    const canBuy = detailKind === "combo" ? (comboBuildable(item) > 0 && pv.price > 0) : (item.qty > 0 && pv.price > 0);
+    const pre = isPreorder(item);
+    const canBuy = pre ? pv.price > 0 : detailKind === "combo" ? (comboBuildable(item) > 0 && pv.price > 0) : (item.qty > 0 && pv.price > 0);
     btn.style.display = "block";
     btn.disabled = !canBuy;
-    btn.textContent = canBuy ? "＋ 加入購物車" : "暫時缺貨";
+    btn.textContent = canBuy ? (pre ? "＋ 預購加入購物車" : "＋ 加入購物車") : "暫時缺貨";
   }
   function closeGallery(){
     document.getElementById("galleryOverlay").classList.remove("active");
@@ -2994,7 +3068,7 @@
     const promoUntil = pv.kind === "promo"
       ? `<span class="promo-until">優惠到 ${pv.end}（剩 ${Math.max(0, daysBetween(todayStr(), pv.end))} 天）</span>` : "";
     return `<div class="product-card">
-      ${photoHtml(itemCover(p), itemImageCount(p), null, "product", p.id)}
+      ${photoHtml(itemCover(p), itemImageCount(p), isPreorder(p) ? `<span class="card-pre-badge">預購</span>` : null, "product", p.id)}
       <div class="body">
         <div class="pname" data-open-detail="product:${p.id}">${p.name}</div>
         <div class="pcat">${p.category || ""}</div>
@@ -3003,7 +3077,7 @@
         ${stockLineHtml(p, false, role)}
         ${detailLinkHtml(p)}
         ${optionPickerHtml(p, "product")}
-        ${cartButtonHtml("product", p.id, p.qty > 0 && pv.price > 0)}
+        ${cartButtonHtml("product", p.id, (isPreorder(p) || p.qty > 0) && pv.price > 0)}
       </div>
     </div>`;
   }
@@ -3016,7 +3090,7 @@
     const promoUntil = pv.kind === "promo"
       ? `<span class="promo-until">優惠到 ${pv.end}（剩 ${Math.max(0, daysBetween(todayStr(), pv.end))} 天）</span>` : "";
     return `<div class="product-card">
-      ${photoHtml(itemCover(c), itemImageCount(c), `<span class="card-combo-badge">組合</span>`, "combo", c.id)}
+      ${photoHtml(itemCover(c), itemImageCount(c), `<span class="card-combo-badge">組合</span>` + (isPreorder(c) ? `<span class="card-pre-badge">預購</span>` : ""), "combo", c.id)}
       <div class="body">
         <div class="pname" data-open-detail="combo:${c.id}">${c.name}</div>
         <div class="pcat">組合商品</div>
@@ -3025,7 +3099,7 @@
         ${stockLineHtml(c, true, role)}
         ${detailLinkHtml(c)}
         ${optionPickerHtml(c, "combo")}
-        ${cartButtonHtml("combo", c.id, comboBuildable(c) > 0 && pv.price > 0)}
+        ${cartButtonHtml("combo", c.id, (isPreorder(c) || comboBuildable(c) > 0) && pv.price > 0)}
       </div>
     </div>`;
   }
@@ -3135,13 +3209,15 @@
         if(!c || !isListed(c)){ removeSilently(i); return; }
         const pv = comboPriceView(c, role === "owner" ? "retail" : role);
         lines.push({ uid:i.uid, kind:"combo", refId:c.id, name:c.name, image:itemCover(c), qty:i.qty, note:i.note || "", options:i.options || {},
-                     unitPrice:pv.price, promo:pv.kind === "promo", max:comboBuildable(c) });
+                     unitPrice:pv.price, promo:pv.kind === "promo", max:availableQty("combo", c.id),
+                     preorder:isPreorder(c), eta:c.preorderEta || "" });
       } else {
         const p = state.products.find(x => x.id === i.refId);
         if(!p || !isListed(p)){ removeSilently(i); return; }
         const pv = productPriceView(p, role === "owner" ? "retail" : role);
         lines.push({ uid:i.uid, kind:"product", refId:p.id, name:p.name, image:itemCover(p), qty:i.qty, note:i.note || "", options:i.options || {},
-                     unitPrice:pv.price, promo:pv.kind === "promo", max:p.qty, unit:p.unit });
+                     unitPrice:pv.price, promo:pv.kind === "promo", max:availableQty("product", p.id), unit:p.unit,
+                     preorder:isPreorder(p), eta:p.preorderEta || "" });
       }
     });
     return lines;
@@ -3289,6 +3365,15 @@
       pickupNote.style.display = "none";
     }
     document.getElementById("cartTotal").textContent = "$" + fmt(sub + fee - discount);
+    const preNote = document.getElementById("cartPreorderNote");
+    const preLines = resolveCart(role).filter(l => l.preorder);
+    if(preLines.length){
+      preNote.style.display = "block";
+      preNote.textContent = "購物車含預購商品（" + preLines.map(l => l.name + (l.eta ? "，預計 " + l.eta + " 到貨" : "")).join("；")
+        + "），整張訂單會等預購商品到貨後一起寄出。";
+    } else {
+      preNote.style.display = "none";
+    }
     renderCheckoutForm();
     updateCartFab();
   }
@@ -3404,7 +3489,9 @@
       elevenSelfNumber: role === "wholesale",
       note: document.getElementById("coNote").value.trim(),
       status: "pending",
-      items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice, note:l.note || "", options:l.options || {} })),
+      items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice, note:l.note || "", options:l.options || {},
+        ...(l.preorder ? { preorder:true, eta:l.eta || "" } : {}) })),
+      hasPreorder: lines.some(l => l.preorder),
       subtotal, shippingFee, discount, total: subtotal + shippingFee - discount
     };
     if(FB.enabled){
@@ -3477,9 +3564,10 @@
     lines.push("－－－－－－－－－－");
     order.items.forEach(it => {
       const optTxt = optionsText(it.options);
-      lines.push(`${it.name}${optTxt ? "（"+optTxt+"）" : ""} x${it.qty}　$${fmt(it.unitPrice)}／件　小計 $${fmt(it.unitPrice*it.qty)}${it.note ? "　備註："+it.note : ""}`);
+      lines.push(`${it.preorder ? "【預購" + (it.eta ? "・預計" + it.eta + "到貨" : "") + "】" : ""}${it.name}${optTxt ? "（"+optTxt+"）" : ""} x${it.qty}　$${fmt(it.unitPrice)}／件　小計 $${fmt(it.unitPrice*it.qty)}${it.note ? "　備註："+it.note : ""}`);
     });
     lines.push("－－－－－－－－－－");
+    if(order.hasPreorder) lines.push("※ 含預購商品（標【預購】者），整張訂單等預購商品到貨後一起寄出。");
     lines.push("商品小計：$" + fmt(orderSubtotal(order)));
     lines.push("運費（" + methodText(order).replace(/（|）/g, m => m === "（" ? "‧" : "") + "）：$" + fmt(orderShipping(order)));
     const disc = Number(order.discount) || 0;
@@ -3511,7 +3599,7 @@
       .filter(o => o.status === "paid" || (shipIncludePending && o.status === "pending"))
       .sort((a,b) => a.createdAt < b.createdAt ? 1 : -1);
   }
-  function shipStatusText(o){ return o.status === "paid" ? "已匯款" : "待匯款"; }
+  function shipStatusText(o){ return (o.status === "paid" ? "已匯款" : "待匯款") + (o.hasPreorder ? "・含預購（等到貨）" : ""); }
 
   function renderShipDigest(){
     const cb = document.getElementById("shipIncludePending");
@@ -3593,7 +3681,7 @@
       const itemsTxt = o.items.map(i => {
         const optTxt = optionsText(i.options);
         const extra = [optTxt, i.note].filter(Boolean).join("，");
-        return `${i.name}×${i.qty}${extra ? `（${extra}）` : ""}`;
+        return `${i.preorder ? "【預購】" : ""}${i.name}×${i.qty}${extra ? `（${extra}）` : ""}`;
       }).join("、");
       const due = orderDueDate(o);
       return `<tr>
@@ -3659,7 +3747,8 @@
     });
     if(short){
       const p = state.products.find(x => x.id === Number(short[0]));
-      showToast(`庫存不足：${p ? p.name : "某商品"} 需要 ${fmt(short[1])}，只剩 ${p ? fmt(p.qty) : 0}。`);
+      showToast(`庫存不足：${p ? p.name : "某商品"} 需要 ${fmt(short[1])}，只剩 ${p ? fmt(p.qty) : 0}。`
+        + (o.hasPreorder ? "（含預購商品，請先到「進出貨登記」登記到貨再出貨）" : ""), 5000);
       return;
     }
     const extraNote = manualCount ? `（其中 ${manualCount} 項為手動輸入品項，不會自動扣庫存）` : "";
@@ -4721,6 +4810,8 @@
     document.getElementById("pImageFile").value = "";
     document.getElementById("pIntro").value = "";
     document.getElementById("pDetailUrl").value = "";
+    document.getElementById("pSaleMode").value = "";
+    document.getElementById("pPreorderEta").value = "";
     document.getElementById("pPromoPrice").value = 0;
     document.getElementById("pPromoStart").value = "";
     document.getElementById("pPromoEnd").value = "";
@@ -4753,6 +4844,8 @@
     document.getElementById("pImageFile").value = "";
     document.getElementById("pIntro").value = p.intro || "";
     document.getElementById("pDetailUrl").value = p.detailUrl || "";
+    document.getElementById("pSaleMode").value = p.saleMode || "";
+    document.getElementById("pPreorderEta").value = p.preorderEta || "";
     pendingProductImages = itemImages(p).slice();
     const pr = normPromo(p) || {};
     document.getElementById("pPromoPrice").value = pr.price || 0;
@@ -4796,6 +4889,8 @@
       image, images,
       intro: document.getElementById("pIntro").value.trim(),
       detailUrl: document.getElementById("pDetailUrl").value.trim(),
+      saleMode: document.getElementById("pSaleMode").value,
+      preorderEta: document.getElementById("pPreorderEta").value.trim(),
       options: optionGroupsFromPending(pendingProductOptions),
       retailPrice: Number(document.getElementById("pRetail").value) || 0,
       wholesalePrice: Number(document.getElementById("pWholesale").value) || 0,
@@ -5346,6 +5441,8 @@
     document.getElementById("comboImageFile").value = "";
     document.getElementById("comboIntro").value = "";
     document.getElementById("comboDetailUrl").value = "";
+    document.getElementById("comboSaleMode").value = "";
+    document.getElementById("comboPreorderEta").value = "";
     document.getElementById("comboFormHint").textContent = "";
     pendingComboImages = [];
     renderComboImageList();
@@ -5373,6 +5470,8 @@
     document.getElementById("comboImageFile").value = "";
     document.getElementById("comboIntro").value = c.intro || "";
     document.getElementById("comboDetailUrl").value = c.detailUrl || "";
+    document.getElementById("comboSaleMode").value = c.saleMode || "";
+    document.getElementById("comboPreorderEta").value = c.preorderEta || "";
     pendingComboImages = itemImages(c).slice();
     renderComboImageList();
     pendingComboOptions = (c.options || []).map(g => ({ name: g.name, choicesText: (g.choices || []).join(",") }));
@@ -5485,6 +5584,8 @@
       image: comboImages[0] || "", images: comboImages,
       intro: document.getElementById("comboIntro").value.trim(),
       detailUrl: document.getElementById("comboDetailUrl").value.trim(),
+      saleMode: document.getElementById("comboSaleMode").value,
+      preorderEta: document.getElementById("comboPreorderEta").value.trim(),
       options: optionGroupsFromPending(pendingComboOptions),
       promo: (cpp > 0 && cps && cpe) ? { price: cpp, start: cps, end: cpe } : null
     };
@@ -6083,6 +6184,7 @@
     storeSearchEl.addEventListener("input", e => { if(!e.isComposing) applyStoreSearch(); });
     storeSearchEl.addEventListener("compositionend", applyStoreSearch);
     document.getElementById("storeSort").onchange = e => { storeSort = e.target.value; renderStore(); };
+    document.getElementById("storeKind").onchange = e => { storeKind = e.target.value; renderStore(); };
     document.getElementById("btnClearBuyer").onclick = (e) => { e.preventDefault(); clearBuyer(); };
     document.getElementById("btnPlaceOrder").onclick = placeOrder;
     document.getElementById("btnCopySlip").onclick = () => {
