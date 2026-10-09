@@ -516,6 +516,7 @@
       <div id="cartLines"></div>
       <p class="empty" id="cartEmpty" style="display:none;">購物車還是空的，先去挑幾樣吧。</p>
       <div id="cartTotalBox" style="display:none;">
+        <div id="cartFreeShipNote" style="display:none; background:var(--primary-soft); border-radius:10px; padding:10px 12px; margin:12px 0 4px; font-size:12.5px; line-height:1.7;"></div>
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span>商品小計</span><span id="cartSubtotalShow">$0</span></div>
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span id="cartShipLabel">運費</span><span id="cartShipShow">$0</span></div>
         <div class="cart-total-row" id="cartDiscountRow" style="font-weight:400; font-size:13.5px; display:none;"><span id="cartDiscountLabel">設立賣貨便</span><span id="cartDiscountShow">-$0</span></div>
@@ -3365,6 +3366,26 @@
       pickupNote.style.display = "none";
     }
     document.getElementById("cartTotal").textContent = "$" + fmt(sub + fee - discount);
+    // 滿額運費折抵提醒（金額跟著後台「店面與權限設定」走）
+    const fsNote = document.getElementById("cartFreeShipNote");
+    const fsOrd = (state.storefront && state.storefront.ordering) || {};
+    const fsThreshold = Number(fsOrd.freeShipThreshold) || 0;
+    if(fsThreshold > 0){
+      const reached = sub >= fsThreshold;
+      const fsLines = [];
+      if(fsOrd.seven !== false || role === "wholesale") fsLines.push(`全館滿 $${fmt(fsThreshold)}　7-11 賣貨便運費 -$${fmt(feeSeven())}`);
+      const takkyuOff = Number(fsOrd.takkyuDiscountAtThreshold) || 0;
+      if(role !== "wholesale" && fsOrd.takkyu !== false && takkyuOff > 0) fsLines.push(`全館滿 $${fmt(fsThreshold)}　宅配運費 -$${fmt(takkyuOff)}`);
+      if(fsLines.length){
+        fsNote.style.display = "block";
+        fsNote.innerHTML = fsLines.join("<br>")
+          + `<br><b style="color:${reached ? "var(--primary-dark)" : "var(--amber)"};">${reached ? "✓ 已達標，運費已自動折抵" : "再買 $" + fmt(fsThreshold - sub) + " 就達標"}</b>`;
+      } else {
+        fsNote.style.display = "none";
+      }
+    } else {
+      fsNote.style.display = "none";
+    }
     const preNote = document.getElementById("cartPreorderNote");
     const preLines = resolveCart(role).filter(l => l.preorder);
     if(preLines.length){
