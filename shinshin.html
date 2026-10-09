@@ -506,7 +506,9 @@
       <div id="cartTotalBox" style="display:none;">
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span>商品小計</span><span id="cartSubtotalShow">$0</span></div>
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span id="cartShipLabel">運費</span><span id="cartShipShow">$0</span></div>
+        <div class="cart-total-row" id="cartDiscountRow" style="font-weight:400; font-size:13.5px; display:none;"><span id="cartDiscountLabel">賣貨便優惠</span><span id="cartDiscountShow">-$0</span></div>
         <div class="cart-total-row"><span>應付總額</span><span id="cartTotal">$0</span></div>
+        <p class="muted" id="cartPickupNote" style="display:none; margin:8px 0 0; font-size:12.5px; line-height:1.7;"></p>
       </div>
       <button class="btn" id="btnBackToStoreBottom" style="margin-top:14px;">← 再去逛逛，加購其他商品</button>
     </div>
@@ -565,7 +567,7 @@
           <input type="checkbox" id="shipIncludePending" style="width:auto;"> 含尚未匯款
         </label>
       </div>
-      <h3 style="font-size:13px; margin:4px 0 8px; font-weight:700;">7-11 店到店（需要：姓名、電話、門市）</h3>
+      <h3 style="font-size:13px; margin:4px 0 8px; font-weight:700;">7-11 賣貨便（需要：姓名、電話、門市）</h3>
       <div class="table-wrap"><table>
         <thead><tr><th>訂單編號</th><th>姓名</th><th>電話</th><th>取貨門市</th><th>備註</th><th>狀態</th></tr></thead>
         <tbody id="ship711Body"></tbody>
@@ -1224,7 +1226,7 @@
         </select>
       </div>
       <div class="grid2">
-        <div class="field"><label>提供 7-11 店到店</label>
+        <div class="field"><label>提供 7-11 賣貨便</label>
           <select id="setDeliverySeven"><option value="1">提供</option><option value="0">不提供</option></select>
         </div>
         <div class="field"><label>7-11 運費</label>
@@ -1317,7 +1319,7 @@
         </div>
         <div class="field"><label>配送</label>
           <select id="omMethod">
-            <option value="711">7-11 店到店</option>
+            <option value="711">7-11 賣貨便</option>
             <option value="takkyu_normal">黑貓宅配（一般）</option>
             <option value="takkyu_large">黑貓宅配（大箱）</option>
           </select>
@@ -3175,11 +3177,24 @@
     }
     return metThreshold ? 0 : feeSeven();
   }
+  /* 7-11 賣貨便：客人取貨時要另付 $58，訂單自動折 $20（批發客走大宗寄件，不適用） */
+  function sevenDiscountFor(method, role){
+    if(method !== "711" || role === "wholesale") return 0;
+    const o = (state.storefront && state.storefront.ordering) || {};
+    return Number(o.sevenDiscount != null ? o.sevenDiscount : 20) || 0;
+  }
+  function sevenPickupPay(){
+    const o = (state.storefront && state.storefront.ordering) || {};
+    return Number(o.sevenPickupPay != null ? o.sevenPickupPay : 58) || 0;
+  }
+  function sevenPickupNoteLines(discount){
+    return ["賣貨便取貨時須付款 $" + fmt(sevenPickupPay()), "運費 $" + fmt(feeSeven()) + "，訂單自動 -$" + fmt(discount)];
+  }
   function takkyuSizeLabel(size){ return size === "large" ? "大箱" : "一般"; }
   /* 訂單／購物車顯示用的配送文字（含黑貓尺寸） */
   function methodText(order){
     if(order.method === "takkyu") return "黑貓宅配（" + takkyuSizeLabel(order.takkyuSize) + "）";
-    return "7-11 店到店";
+    return "7-11 賣貨便";
   }
   /* 台灣身分證字號格式檢查（大寫英文 + 1/2 + 8 碼數字，並驗證檢查碼） */
   function isValidTwId(v){
@@ -3260,10 +3275,20 @@
     const sub = cartSubtotal(role);
     const fee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize, sub);
     document.getElementById("cartSubtotalShow").textContent = "$" + fmt(sub);
+    const discount = Math.min(sevenDiscountFor(checkoutMethod, role), sub + fee);
     document.getElementById("cartShipLabel").textContent = "運費（"
-      + (checkoutMethod === "takkyu" ? "黑貓宅配・" + takkyuSizeLabel(checkoutTakkyuSize) : "7-11 店到店") + "）";
+      + (checkoutMethod === "takkyu" ? "黑貓宅配・" + takkyuSizeLabel(checkoutTakkyuSize) : "7-11 賣貨便") + "）";
     document.getElementById("cartShipShow").textContent = "$" + fmt(fee);
-    document.getElementById("cartTotal").textContent = "$" + fmt(sub + fee);
+    document.getElementById("cartDiscountRow").style.display = discount > 0 ? "flex" : "none";
+    document.getElementById("cartDiscountShow").textContent = "-$" + fmt(discount);
+    const pickupNote = document.getElementById("cartPickupNote");
+    if(discount > 0){
+      pickupNote.style.display = "block";
+      pickupNote.innerHTML = sevenPickupNoteLines(discount).join("<br>");
+    } else {
+      pickupNote.style.display = "none";
+    }
+    document.getElementById("cartTotal").textContent = "$" + fmt(sub + fee - discount);
     renderCheckoutForm();
     updateCartFab();
   }
@@ -3283,7 +3308,7 @@
     const sub = cartSubtotal(role);
     const group = document.getElementById("coMethodGroup");
     const btns = [];
-    if(seven) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='711'?'active':''}" data-method="711">7-11 店到店（運費 $${fmt(shippingFeeFor("711", null, sub))}）</button>`);
+    if(seven) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='711'?'active':''}" data-method="711">7-11 賣貨便（運費 $${fmt(shippingFeeFor("711", null, sub))}）</button>`);
     if(takkyu) btns.push(`<button type="button" class="seg-btn ${checkoutMethod==='takkyu'?'active':''}" data-method="takkyu">黑貓宅配（一般 $${fmt(shippingFeeFor("takkyu", "normal", sub))} / 大箱 $${fmt(shippingFeeFor("takkyu", "large", sub))}）</button>`);
     if(btns.length === 0) btns.push(`<span class="muted">賣家目前未開放任何配送方式</span>`);
     group.innerHTML = btns.join("");
@@ -3318,7 +3343,7 @@
     if(is711 && wholesale){
       hint.textContent = "批發客一律走 7-11 大宗寄件：單號由 7-11 系統自行配號，請留下取貨門市，賣家配號後會另行通知。";
     } else if(is711){
-      hint.textContent = "請填 7-11 取貨門市名稱或店號，賣家會用「賣貨便／交貨便」寄出。";
+      hint.textContent = "請填 7-11 取貨門市名稱或店號，賣家會用「賣貨便」寄出。";
     } else {
       hint.textContent = "";
     }
@@ -3366,6 +3391,7 @@
 
     const subtotal = lines.reduce((s,l) => s + l.unitPrice * l.qty, 0);
     const shippingFee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize, subtotal);
+    const discount = Math.min(sevenDiscountFor(checkoutMethod, role), subtotal + shippingFee);
     const order = {
       id: FB.enabled ? Date.now() : (state.nextOrderId || ((state.orders||[]).length + 1)),
       no: orderNo(),
@@ -3379,7 +3405,7 @@
       note: document.getElementById("coNote").value.trim(),
       status: "pending",
       items: lines.map(l => ({ kind:l.kind, refId:l.refId, name:l.name, qty:l.qty, unitPrice:l.unitPrice, note:l.note || "", options:l.options || {} })),
-      subtotal, shippingFee, total: subtotal + shippingFee
+      subtotal, shippingFee, discount, total: subtotal + shippingFee - discount
     };
     if(FB.enabled){
       hint.style.color = ""; hint.textContent = "送出中…";
@@ -3415,7 +3441,7 @@
     window.scrollTo(0, 0);
   }
 
-  function methodLabel(m){ return m === "takkyu" ? "黑貓宅配" : "7-11 店到店"; }
+  function methodLabel(m){ return m === "takkyu" ? "黑貓宅配" : "7-11 賣貨便"; }
 
   function orderDueDate(order){
     const days = Number((state.storefront && state.storefront.ordering && state.storefront.ordering.dueDays)) || 3;
@@ -3456,7 +3482,10 @@
     lines.push("－－－－－－－－－－");
     lines.push("商品小計：$" + fmt(orderSubtotal(order)));
     lines.push("運費（" + methodText(order).replace(/（|）/g, m => m === "（" ? "‧" : "") + "）：$" + fmt(orderShipping(order)));
+    const disc = Number(order.discount) || 0;
+    if(disc > 0) lines.push("賣貨便優惠：-$" + fmt(disc));
     lines.push("應付總額：$" + fmt(order.total));
+    if(disc > 0) sevenPickupNoteLines(disc).forEach(l => lines.push(l));
     if(order.note) lines.push("備註：" + order.note);
     lines.push("請於 " + fmtDateTime(orderDueDate(order)) + " 前完成匯款，逾期訂單自動取消。");
     return lines.join("\n");
@@ -3573,7 +3602,7 @@
         <td>${o.customerName}<div class="muted">${o.phone}</div>${o.role === "wholesale" && o.customerId ? `<div class="muted">ID：${o.customerId}</div>` : ""}</td>
         <td>${o.role === "wholesale" ? "批發客" : "一般客"}</td>
         <td class="muted" style="white-space:normal; max-width:220px;">${itemsTxt}</td>
-        <td class="qty">$${fmt(o.total)}<div class="muted">含運 $${fmt(orderShipping(o))}</div></td>
+        <td class="qty">$${fmt(o.total)}<div class="muted">含運 $${fmt(orderShipping(o))}${Number(o.discount) > 0 ? "，優惠 -$" + fmt(o.discount) : ""}</div></td>
         <td>${methodText(o)}<div class="muted">${o.dest || ""}</div>${o.elevenSelfNumber ? `<div class="muted">自行配號</div>` : ""}</td>
         <td class="${orderOverdue(o) ? "" : "muted"}" style="${orderOverdue(o) ? "color:var(--danger); font-weight:700;" : ""}">${o.status === "pending" ? fmtDateTime(due) : "—"}</td>
         <td>${orderStatusTag(o)}</td>
@@ -4634,7 +4663,7 @@
     if(list.length === 0) return `<p class="muted">尚未加入選項類別</p>`;
     return list.map((g, idx) => `<div style="display:flex; gap:8px; margin-bottom:8px; align-items:center; flex-wrap:wrap;">
       <input type="text" data-opt-row="${idx}" class="opt-row-name" style="flex:0 0 110px;" placeholder="類別名稱，如：顏色" value="${(g.name || "").replace(/"/g, "&quot;")}">
-      <input type="text" data-opt-row="${idx}" class="opt-row-choices" style="flex:2;" placeholder="選項，用逗號分隔，如：紅,藍,綠" value="${(g.choicesText || "").replace(/"/g, "&quot;")}">
+      <input type="text" data-opt-row="${idx}" class="opt-row-choices" style="flex:2;" placeholder="選項，用逗號分隔，如：紅，藍，綠" value="${(g.choicesText || "").replace(/"/g, "&quot;")}">
       <button type="button" class="btn small danger-outline" data-opt-row-remove="${idx}">移除</button>
     </div>`).join("");
   }
@@ -4657,7 +4686,7 @@
   }
   function optionGroupsFromPending(list){
     return list
-      .map(g => ({ name: (g.name || "").trim(), choices: (g.choicesText || "").split(",").map(s => s.trim()).filter(Boolean) }))
+      .map(g => ({ name: (g.name || "").trim(), choices: (g.choicesText || "").split(/[,，、]/).map(s => s.trim()).filter(Boolean) }))
       .filter(g => g.name && g.choices.length > 0);
   }
   function updateProductMarginHint(){
