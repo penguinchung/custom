@@ -845,6 +845,11 @@
         <div class="field"><label>一般客售價</label><input type="number" id="comboPrice" min="0" value="0"></div>
         <div class="field"><label>批發客售價（選填）</label><input type="number" id="comboWholesale" min="0" value="0"></div>
       </div>
+      <div class="field">
+        <label>組合折數（選填，例如 9＝9折、85＝85折，0＝不使用）</label>
+        <input type="number" id="comboDiscount" min="0" max="99.9" step="0.1" value="0" style="width:120px;">
+        <p class="muted" id="comboDiscountHint" style="margin-top:4px;"></p>
+      </div>
       <div class="grid3">
         <div class="field"><label>是否在店面上架</label>
           <select id="comboListed"><option value="1">上架</option><option value="0">下架</option></select>
@@ -859,12 +864,8 @@
       </div>
       <div class="field">
         <label>組合照片（最多 20 張，第 1 張是店面封面照，選填）</label>
-        <div class="grid2">
-          <div class="field" style="margin:0;"><input type="text" id="comboImageUrl" placeholder="貼上圖片網址，按「新增網址」加入"></div>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn small" id="btnAddComboImageUrl">＋ 新增網址</button>
-            <label class="btn small" style="cursor:pointer; margin:0;">＋ 上傳照片<input type="file" id="comboImageFile" accept="image/*" multiple style="display:none;"></label>
-          </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <label class="btn small" style="cursor:pointer; margin:0;">＋ 上傳照片<input type="file" id="comboImageFile" accept="image/*" multiple style="display:none;"></label>
         </div>
         <div id="comboImageList"></div>
         <p class="muted" id="comboImageHint" style="margin-top:4px;"></p>
@@ -886,10 +887,6 @@
       <div class="field" style="margin-top:12px;">
         <label>組合簡介（選填，客人點商品會跳出視窗看到）</label>
         <textarea id="comboIntro" rows="3" placeholder="材質、內容物、搭配方式等簡短說明"></textarea>
-      </div>
-      <div class="field" style="margin-top:12px;">
-        <label>組合介紹外部連結（選填）</label>
-        <input type="text" id="comboDetailUrl" placeholder="若有另外整理的介紹頁網址，客人會多看到一個連結">
       </div>
       <div class="field" style="margin-top:12px;">
         <label>選項類別（例如顏色、尺寸，選填；客人下單前要選一個）</label>
@@ -969,12 +966,8 @@
 
       <div class="field">
         <label>商品照片（最多 20 張，第 1 張是店面封面照，選填）</label>
-        <div class="grid2">
-          <div class="field" style="margin:0;"><input type="text" id="pImageUrl" placeholder="貼上圖片網址，按「新增網址」加入"></div>
-          <div style="display:flex; gap:6px; align-items:center;">
-            <button type="button" class="btn small" id="btnAddImageUrl">＋ 新增網址</button>
-            <label class="btn small" style="cursor:pointer; margin:0;">＋ 上傳照片<input type="file" id="pImageFile" accept="image/*" multiple style="display:none;"></label>
-          </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <label class="btn small" style="cursor:pointer; margin:0;">＋ 上傳照片<input type="file" id="pImageFile" accept="image/*" multiple style="display:none;"></label>
         </div>
         <div id="pImageList"></div>
         <p class="muted" id="pImageHint" style="margin-top:4px;"></p>
@@ -996,10 +989,6 @@
       <div class="field" style="margin-top:12px;">
         <label>商品簡介（選填，客人點商品會跳出視窗看到）</label>
         <textarea id="pIntro" rows="3" placeholder="材質、尺寸建議、使用方式等簡短說明"></textarea>
-      </div>
-      <div class="field" style="margin-top:12px;">
-        <label>商品介紹外部連結（選填）</label>
-        <input type="text" id="pDetailUrl" placeholder="若有另外整理的介紹頁網址，客人會多看到一個連結">
       </div>
       <div class="field" style="margin-top:12px;">
         <label>選項類別（例如顏色、尺寸，選填；客人下單前要選一個）</label>
@@ -1227,7 +1216,7 @@
         </select>
         <p class="muted" id="imageModeHint" style="margin-top:4px;"></p>
         <button type="button" class="btn small" id="btnRecompressImages" style="margin-top:8px;">重新壓縮所有已上傳的照片</button>
-        <p class="muted" id="recompressHint" style="margin-top:4px;">把之前上傳（非貼網址）的照片，用上面這個設定和新的壓縮方式重新處理一次，縮小雲端資料體積，畫質幾乎沒有差別。貼網址的照片不受影響，數量多時處理需要一點時間，請勿中途關閉分頁。</p>
+        <p class="muted" id="recompressHint" style="margin-top:4px;">把之前上傳的照片，用上面這個設定和新的壓縮方式重新處理一次，縮小雲端資料體積，畫質幾乎沒有差別。數量多時處理需要一點時間，請勿中途關閉分頁。</p>
       </div>
       <div class="field">
         <label>批發客密碼（留空＝不開放批發價檢視）</label>
@@ -1424,7 +1413,6 @@
     </div>
     <div class="gallery-pre" id="galleryPreorder" style="display:none;"></div>
     <p class="gallery-intro" id="galleryIntro" style="display:none;"></p>
-    <a class="detail-link" id="galleryDetailLink" target="_blank" rel="noopener" style="display:none;">看完整介紹 →</a>
     <div id="galleryOptions"></div>
     <button class="add-cart-btn" id="galleryAddCartBtn" style="display:none;">＋ 加入購物車</button>
   </div>
@@ -2050,6 +2038,7 @@
           id: c.id, name: c.name, intro: c.intro || "", detailUrl: c.detailUrl || "",
           options: c.options || [],
           saleMode: c.saleMode || "", preorderEta: c.preorderEta || "",
+          discount: Number(c.discount) || 0,
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
           canMake: comboBuildable(c) > 0, createdAt: c.createdAt || 0,
@@ -2279,7 +2268,7 @@
   function heaviestImageHint(){
     const heavy = heaviestImageItems(3);
     if(!heavy.length) return "";
-    return "，最佔空間的商品：" + heavy.map(h => `「${h.name}」約 ${Math.round(h.size/1024)}KB`).join("、") + "，這幾項的照片建議改成「貼網址」而不是上傳。";
+    return "，最佔空間的商品：" + heavy.map(h => `「${h.name}」約 ${Math.round(h.size/1024)}KB`).join("、") + "，建議減少這幾項的照片張數。";
   }
   function renderCloudSyncStatus(){
     const el = document.getElementById("cloudSyncStatus");
@@ -2327,7 +2316,7 @@
     renderCloudSyncStatus();
     const heaviest = heaviestImageItems(1)[0];
     if(heaviest && heaviest.size > 900000){
-      showToast(`「${heaviest.name}」的照片太大（約 ${Math.round(heaviest.size / 1024)}KB），單一商品的照片最多約 1MB，請減少張數或改貼網址。`, 6000);
+      showToast(`「${heaviest.name}」的照片太大（約 ${Math.round(heaviest.size / 1024)}KB），單一商品的照片最多約 1MB，請減少照片張數。`, 6000);
     }
     try{
       const { products, composites, ...metaRest } = state;
@@ -2370,7 +2359,7 @@
       FB.firstRun = false;
       updateCloudUploadBtn();
       if(failedNames.length){
-        fbLastErrorMsg = `以下商品／組合的照片太大、沒有同步成功：${failedNames.join("、")}。其餘商品已正常同步，請幫這幾項減少照片張數或改貼網址。`;
+        fbLastErrorMsg = `以下商品／組合的照片太大、沒有同步成功：${failedNames.join("、")}。其餘商品已正常同步，請幫這幾項減少照片張數。`;
         showToast(fbLastErrorMsg, 8000);
         fbSyncState = "error";
       } else {
@@ -2932,9 +2921,6 @@
     const introEl = document.getElementById("galleryIntro");
     introEl.textContent = item.intro || "";
     introEl.style.display = item.intro ? "block" : "none";
-    const link = document.getElementById("galleryDetailLink");
-    const u = safeUrl(item.detailUrl);
-    if(u){ link.href = u; link.style.display = "inline-block"; } else { link.style.display = "none"; }
     document.getElementById("galleryOptions").innerHTML = optionPickerHtml(item, kind);
     const preEl = document.getElementById("galleryPreorder");
     preEl.textContent = isPreorder(item) ? preorderLineText(item) + "，到貨後再一起寄出" : "";
@@ -3034,10 +3020,6 @@
     u = (u || "").trim();
     return /^https?:\/\//i.test(u) ? u : "";
   }
-  function detailLinkHtml(item){
-    const u = safeUrl(item.detailUrl);
-    return u ? `<a class="detail-link" href="${u}" target="_blank" rel="noopener">看完整介紹 →</a>` : "";
-  }
 
   function productCardHtml(p, role){
     const pv = productPriceView(p, role === "owner" ? "retail" : role);
@@ -3054,7 +3036,6 @@
         <div class="price-row">${priceRow}</div>
         ${promoUntil}
         ${stockLineHtml(p, false, role)}
-        ${detailLinkHtml(p)}
         ${optionPickerHtml(p, "product")}
         ${cartButtonHtml("product", p.id, (isPreorder(p) || p.qty > 0) && pv.price > 0)}
       </div>
@@ -3068,6 +3049,8 @@
       : `<span class="price-now">${priceText(pv.price)}</span>`;
     const promoUntil = pv.kind === "promo"
       ? `<span class="promo-until">優惠到 ${pv.end}（剩 ${Math.max(0, daysBetween(todayStr(), pv.end))} 天）</span>` : "";
+    const comboDiscountTag = (role !== "wholesale" && pv.kind !== "promo" && Number(c.discount) > 0)
+      ? `<span class="promo-until">組合優惠 ${Number(c.discount)} 折</span>` : "";
     return `<div class="product-card">
       ${photoHtml(itemCover(c), itemImageCount(c), `<span class="card-combo-badge">組合</span>` + (isPreorder(c) ? `<span class="card-pre-badge">預購</span>` : ""), "combo", c.id)}
       <div class="body">
@@ -3075,8 +3058,8 @@
         <div class="pcat">組合商品</div>
         <div class="price-row">${priceRow}</div>
         ${promoUntil}
+        ${comboDiscountTag}
         ${stockLineHtml(c, true, role)}
-        ${detailLinkHtml(c)}
         ${optionPickerHtml(c, "combo")}
         ${cartButtonHtml("combo", c.id, (isPreorder(c) || comboBuildable(c) > 0) && pv.price > 0)}
       </div>
@@ -4696,9 +4679,9 @@
     const el = document.getElementById("imageModeHint");
     if(!el) return;
     const v = document.getElementById("setImageMode").value;
-    const cloudNote = (FB.enabled && FB.isOwner) ? "有接雲端同步：所有商品的照片共用同一份 1MB 額度，上傳照片的商品建議控制在幾張就好，其餘可以改貼網址。" : "";
+    const cloudNote = (FB.enabled && FB.isOwner) ? "有接雲端同步：所有商品的照片共用同一份 1MB 額度，每個商品的照片不要放太多張。" : "";
     el.textContent = v === "0"
-      ? "原圖會直接存進資料裡：畫質最好，但每張可能 2～8MB。瀏覽器本機儲存約 5MB 上限，只放得下 1～2 張，很快會存不下、匯出檔也會超大。大量原圖建議改用圖片空間（貼網址）或後端。" + (cloudNote ? " " + cloudNote : "")
+      ? "原圖會直接存進資料裡：畫質最好，但每張可能 2～8MB。瀏覽器本機儲存約 5MB 上限，只放得下 1～2 張，很快會存不下、匯出檔也會超大。大量原圖建議改回有壓縮的設定。" + (cloudNote ? " " + cloudNote : "")
       : v === "1600"
       ? "已自動用 WebP 壓縮，每張約 150～350KB，本機大概放得下 15～30 張。" + (cloudNote ? " " + cloudNote : "")
       : "已自動用 WebP 壓縮，每張約 40～100KB，本機大概放得下 40～80 張（建議值）。" + (cloudNote ? " " + cloudNote : "");
@@ -4742,7 +4725,7 @@
   function renderProductImageList(){
     document.getElementById("pImageList").innerHTML = imageManagerHtml(pendingProductImages, "p");
     document.getElementById("pImageHint").textContent = pendingProductImages.length
-      ? `已加入 ${pendingProductImages.length}／20 張，第 1 張會顯示在店面卡片上。上傳的照片約佔單一商品容量的 ${photoUsagePct(pendingProductImages)}%，張數多時會自動降低畫質；貼網址的照片不佔容量。`
+      ? `已加入 ${pendingProductImages.length}／20 張，第 1 張會顯示在店面卡片上。上傳的照片約佔單一商品容量的 ${photoUsagePct(pendingProductImages)}%，張數多時會自動降低畫質。`
       : "尚未加入照片，店面會顯示「尚無照片」。";
   }
 
@@ -4805,10 +4788,8 @@
     document.getElementById("pRetail").value = 0;
     document.getElementById("pWholesale").value = 0;
     document.getElementById("pListed").value = "1";
-    document.getElementById("pImageUrl").value = "";
     document.getElementById("pImageFile").value = "";
     document.getElementById("pIntro").value = "";
-    document.getElementById("pDetailUrl").value = "";
     document.getElementById("pSaleMode").value = "";
     document.getElementById("pPreorderEta").value = "";
     document.getElementById("pPromoPrice").value = 0;
@@ -4839,10 +4820,8 @@
     document.getElementById("pRetail").value = Number(p.retailPrice) || 0;
     document.getElementById("pWholesale").value = Number(p.wholesalePrice) || 0;
     document.getElementById("pListed").value = isListed(p) ? "1" : "0";
-    document.getElementById("pImageUrl").value = "";
     document.getElementById("pImageFile").value = "";
     document.getElementById("pIntro").value = p.intro || "";
-    document.getElementById("pDetailUrl").value = p.detailUrl || "";
     document.getElementById("pSaleMode").value = p.saleMode || "";
     document.getElementById("pPreorderEta").value = p.preorderEta || "";
     pendingProductImages = itemImages(p).slice();
@@ -4864,10 +4843,6 @@
       showToast("請先在下方新增至少一項分類。");
       return;
     }
-    const typedUrl = document.getElementById("pImageUrl").value.trim();
-    if(typedUrl && pendingProductImages.length < 20 && !pendingProductImages.includes(typedUrl)){
-      pendingProductImages.push(typedUrl);
-    }
     await fitPhotosToBudget(pendingProductImages);
     const images = pendingProductImages.slice(0, 20);
     const image = images[0] || "";
@@ -4887,7 +4862,6 @@
       unit: document.getElementById("pUnit").value.trim() || "件",
       image, images,
       intro: document.getElementById("pIntro").value.trim(),
-      detailUrl: document.getElementById("pDetailUrl").value.trim(),
       saleMode: document.getElementById("pSaleMode").value,
       preorderEta: document.getElementById("pPreorderEta").value.trim(),
       options: optionGroupsFromPending(pendingProductOptions),
@@ -5416,7 +5390,7 @@
   function renderComboImageList(){
     document.getElementById("comboImageList").innerHTML = imageManagerHtml(pendingComboImages, "combo");
     document.getElementById("comboImageHint").textContent = pendingComboImages.length
-      ? `已加入 ${pendingComboImages.length}／20 張，第 1 張會顯示在店面卡片上。上傳的照片約佔單一組合容量的 ${photoUsagePct(pendingComboImages)}%，張數多時會自動降低畫質；貼網址的照片不佔容量。`
+      ? `已加入 ${pendingComboImages.length}／20 張，第 1 張會顯示在店面卡片上。上傳的照片約佔單一組合容量的 ${photoUsagePct(pendingComboImages)}%，張數多時會自動降低畫質。`
       : "尚未加入照片，店面會顯示「尚無照片」。";
   }
   let pendingComboOptions = [];
@@ -5436,10 +5410,11 @@
     document.getElementById("comboPromoPrice").value = 0;
     document.getElementById("comboPromoStart").value = "";
     document.getElementById("comboPromoEnd").value = "";
-    document.getElementById("comboImageUrl").value = "";
     document.getElementById("comboImageFile").value = "";
     document.getElementById("comboIntro").value = "";
-    document.getElementById("comboDetailUrl").value = "";
+    document.getElementById("comboDiscount").value = 0;
+    document.getElementById("comboPrice").readOnly = false;
+    document.getElementById("comboDiscountHint").textContent = "";
     document.getElementById("comboSaleMode").value = "";
     document.getElementById("comboPreorderEta").value = "";
     document.getElementById("comboFormHint").textContent = "";
@@ -5465,10 +5440,9 @@
     document.getElementById("comboPromoPrice").value = pr.price || 0;
     document.getElementById("comboPromoStart").value = pr.start || "";
     document.getElementById("comboPromoEnd").value = pr.end || "";
-    document.getElementById("comboImageUrl").value = "";
     document.getElementById("comboImageFile").value = "";
     document.getElementById("comboIntro").value = c.intro || "";
-    document.getElementById("comboDetailUrl").value = c.detailUrl || "";
+    document.getElementById("comboDiscount").value = Number(c.discount) || 0;
     document.getElementById("comboSaleMode").value = c.saleMode || "";
     document.getElementById("comboPreorderEta").value = c.preorderEta || "";
     pendingComboImages = itemImages(c).slice();
@@ -5477,6 +5451,53 @@
     renderComboOptionRows();
     pendingRecipe = c.recipe.map(normalizeRecipeItem);
     renderRecipeRows();
+    updateComboDiscountHint();
+  }
+
+  /* ---- 組合折數：一般客售價 ＝ 配方各商品一般客售價合計 × 折數（9＝9折、85＝85折） ---- */
+  function comboDiscountRate(d){
+    d = Number(d) || 0;
+    if(d <= 0 || d >= 100) return 0;
+    return d >= 10 ? d / 100 : d / 10;
+  }
+  function comboRetailSum(recipe, selfId){
+    const flat = flattenRecipe(recipe || [], 1, new Set(selfId != null ? [selfId] : []));
+    let sum = 0, missing = 0;
+    Object.entries(flat).forEach(([pid, q]) => {
+      const p = state.products.find(x => x.id === Number(pid));
+      const rp = p ? (Number(p.retailPrice) || 0) : 0;
+      if(!rp) missing++;
+      sum += rp * q;
+    });
+    return { sum, missing };
+  }
+  /* 有設折數的組合，商品改價後這裡會把組合售價重算一次（客人視角沒有配方，不處理） */
+  function refreshDiscountedComboPrices(){
+    if(state._customerView) return false;
+    let changed = false;
+    (state.composites || []).forEach(c => {
+      const rate = comboDiscountRate(c.discount);
+      if(!rate || !Array.isArray(c.recipe) || !c.recipe.length) return;
+      const np = Math.round(comboRetailSum(c.recipe, c.id).sum * rate);
+      if(np > 0 && np !== c.price){ c.price = np; changed = true; }
+    });
+    return changed;
+  }
+  function updateComboDiscountHint(){
+    const priceEl = document.getElementById("comboPrice");
+    const hintEl = document.getElementById("comboDiscountHint");
+    if(!priceEl || !hintEl) return;
+    const rate = comboDiscountRate(document.getElementById("comboDiscount").value);
+    if(!rate){ priceEl.readOnly = false; hintEl.textContent = ""; return; }
+    const editingId = document.getElementById("editComboId").value;
+    const recipe = pendingRecipe.filter(r => r.refId != null && r.qty > 0);
+    const { sum, missing } = comboRetailSum(recipe, editingId ? Number(editingId) : null);
+    priceEl.readOnly = true;
+    if(sum <= 0){ priceEl.value = 0; hintEl.textContent = "配方裡的商品還沒有一般客售價，或還沒加入商品，算不出組合售價。"; return; }
+    const np = Math.round(sum * rate);
+    priceEl.value = np;
+    hintEl.textContent = `原價合計 $${fmt(Math.round(sum))} × ${Math.round(rate * 1000) / 10}% ＝ 一般客售價 $${fmt(np)}（商品改價後會自動重算）`
+      + (missing ? `。注意：有 ${missing} 項商品沒設一般客售價，以 $0 計算。` : "");
   }
 
   function logAmount(l){
@@ -5570,19 +5591,24 @@
     const cpe = document.getElementById("comboPromoEnd").value;
     if(cpp > 0 && (!cps || !cpe)){ hint.style.color = "var(--danger)"; hint.textContent = "設了優惠價就要填優惠的開始與結束日。"; return; }
     if(cpp > 0 && cps && cpe && cpe < cps){ hint.style.color = "var(--danger)"; hint.textContent = "優惠結束日不能早於開始日。"; return; }
-    const typedComboUrl = document.getElementById("comboImageUrl").value.trim();
-    if(typedComboUrl && pendingComboImages.length < 20 && !pendingComboImages.includes(typedComboUrl)){
-      pendingComboImages.push(typedComboUrl);
+    const discount = Number(document.getElementById("comboDiscount").value) || 0;
+    if(discount < 0 || discount >= 100){ hint.style.color = "var(--danger)"; hint.textContent = "折數請填 0～99.9 之間（例如 9＝9折、85＝85折）。"; return; }
+    // 有填折數：一般客售價＝配方裡各商品一般客售價合計 × 折數（商品改價後會自動跟著重算）
+    const discRate = comboDiscountRate(discount);
+    let finalPrice = price;
+    if(discRate > 0){
+      const { sum } = comboRetailSum(recipe, id ? Number(id) : null);
+      if(sum <= 0){ hint.style.color = "var(--danger)"; hint.textContent = "配方裡的商品還沒設定一般客售價，沒辦法用折數計算，請先設定售價。"; return; }
+      finalPrice = Math.round(sum * discRate);
     }
     await fitPhotosToBudget(pendingComboImages);
     const comboImages = pendingComboImages.slice(0, 20);
     const data = {
-      name, price, recipe,
+      name, price: finalPrice, discount, recipe,
       wholesalePrice: Number(document.getElementById("comboWholesale").value) || 0,
       listed: document.getElementById("comboListed").value === "1",
       image: comboImages[0] || "", images: comboImages,
       intro: document.getElementById("comboIntro").value.trim(),
-      detailUrl: document.getElementById("comboDetailUrl").value.trim(),
       saleMode: document.getElementById("comboSaleMode").value,
       preorderEta: document.getElementById("comboPreorderEta").value.trim(),
       options: optionGroupsFromPending(pendingComboOptions),
@@ -5970,6 +5996,7 @@
     }
   }
   function persist(){
+    refreshDiscountedComboPrices();
     const json = JSON.stringify(state);
     try{
       if(window.storage){
@@ -6372,15 +6399,6 @@
       addImagesFromFiles(Array.from(e.target.files || []), pendingProductImages, renderProductImageList);
       e.target.value = "";
     };
-    document.getElementById("btnAddImageUrl").onclick = () => {
-      const input = document.getElementById("pImageUrl");
-      const v = input.value.trim();
-      if(!v) return;
-      if(pendingProductImages.length >= 20){ showToast("最多只能加入 20 張照片"); return; }
-      pendingProductImages.push(v);
-      input.value = "";
-      renderProductImageList();
-    };
     ["pRetail","pWholesale","pPrice","pPromoPrice","pPromoStart","pPromoEnd"].forEach(id => {
       document.getElementById(id).addEventListener("input", updateProductMarginHint);
     });
@@ -6389,15 +6407,9 @@
       addImagesFromFiles(Array.from(e.target.files || []), pendingComboImages, renderComboImageList);
       e.target.value = "";
     };
-    document.getElementById("btnAddComboImageUrl").onclick = () => {
-      const input = document.getElementById("comboImageUrl");
-      const v = input.value.trim();
-      if(!v) return;
-      if(pendingComboImages.length >= 20){ showToast("最多只能加入 20 張照片"); return; }
-      pendingComboImages.push(v);
-      input.value = "";
-      renderComboImageList();
-    };
+    document.getElementById("comboDiscount").addEventListener("input", updateComboDiscountHint);
+    document.getElementById("recipeRows").addEventListener("input", updateComboDiscountHint);
+    document.getElementById("recipeRows").addEventListener("change", updateComboDiscountHint);
     document.getElementById("btnAddProductOption").onclick = () => {
       if(pendingProductOptions.length >= 5){ showToast("最多 5 種選項類別"); return; }
       pendingProductOptions.push({ name: "", choicesText: "" });
