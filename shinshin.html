@@ -480,11 +480,6 @@
       </div>
     </div>
 
-    <div class="promo-strip" id="promoStrip" style="display:none;">
-      <h3>⏳ 本週優惠到期款</h3>
-      <div class="promo-items" id="promoStripItems"></div>
-    </div>
-
     <div class="store-tools">
       <input type="text" id="storeSearch" class="store-search" placeholder="🔍 搜尋商品名稱、分類" autocomplete="off" enterkeyhint="search">
       <select id="storeKind" class="store-sort" aria-label="現貨或預購">
@@ -2729,23 +2724,6 @@
         b.classList.toggle("active", b.dataset.prole === ownerPreviewRole);
         b.onclick = () => { ownerPreviewRole = b.dataset.prole; renderStore(); };
       });
-    }
-
-    // 本週優惠到期款
-    const strip = document.getElementById("promoStrip");
-    const stripItems = document.getElementById("promoStripItems");
-    const ending = state.products
-      .filter(p => isListed(p))
-      .map(p => ({ p, e: promoEndingSoon(p) }))
-      .filter(x => x.e);
-    if(role !== "wholesale" && ending.length){
-      strip.style.display = "block";
-      stripItems.innerHTML = ending.map(({p, e}) =>
-        `<div class="promo-chip"><b>${p.name}</b>優惠價 $${fmt(e.price)}（原價 $${fmt(Number(p.retailPrice)||0)}）<br>
-         優惠到 ${e.end}　<span class="days">${e.daysLeft <= 0 ? "今天最後一天" : "剩 " + e.daysLeft + " 天"}</span></div>`
-      ).join("");
-    } else {
-      strip.style.display = "none";
     }
 
     // 分類篩選
