@@ -2694,6 +2694,7 @@
 
   /* ---------- render: storefront ---------- */
   let storeCat = "";
+  const COMBO_CAT = "__combo"; // 分類列最後一顆「組合價商品」，只顯示組合商品
   let storeQuery = "";
   let storeSort = "default";
   let storeKind = ""; // "" 全部｜"stock" 現貨｜"preorder" 預購
@@ -2718,8 +2719,11 @@
     // 分類篩選
     const cats = state.categories.filter(c => state.products.some(p => p.category === c && isListed(p)));
     const catBar = document.getElementById("storeCatFilters");
+    const hasCombos = (state.composites || []).some(c => isListed(c));
+    if(storeCat === COMBO_CAT && !hasCombos) storeCat = "";
     catBar.innerHTML = [`<button class="store-cat-btn ${storeCat===""?"active":""}" data-cat="">全部</button>`]
       .concat(cats.map(c => `<button class="store-cat-btn ${storeCat===c?"active":""}" data-cat="${c}">${c}</button>`))
+      .concat(hasCombos ? [`<button class="store-cat-btn ${storeCat===COMBO_CAT?"active":""}" data-cat="${COMBO_CAT}">組合價商品</button>`] : [])
       .join("");
     catBar.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { storeCat = b.dataset.cat; renderStore(); });
 
@@ -2729,7 +2733,7 @@
     if(storeCat) prods = prods.filter(p => p.category === storeCat);
 
     let combos = (state.composites || []).filter(c => isListed(c));
-    if(storeCat) combos = []; // 組合商品不綁單一分類
+    if(storeCat && storeCat !== COMBO_CAT) combos = []; // 組合商品不綁單一分類，只在「全部」和「組合價商品」出現
 
     if(storeKind){
       const want = storeKind === "preorder";
@@ -6099,6 +6103,7 @@
     });
     splitOptionChoices(st.products);
     splitOptionChoices(st.composites);
+    if(st === state && refreshDiscountedComboPrices()) optionsSplitFixed = true; // 折數組合售價有變動 → 老闆登入後順便存回雲端
   }
 
   /* 把本機 localStorage（或範例）資料載入 state — 單機模式、以及雲端還沒資料時的起點 */
