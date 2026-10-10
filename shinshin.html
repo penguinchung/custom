@@ -2037,7 +2037,9 @@
         const row = {
           id: c.id, name: c.name, intro: c.intro || "", detailUrl: c.detailUrl || "",
           options: c.options || [],
-          saleMode: c.saleMode || "", preorderEta: c.preorderEta || "",
+          saleMode: c.saleMode || "",
+          preorderEta: c.preorderEta || comboPreorderInfo(c).eta || "",
+          autoPreorder: comboPreorderInfo(c).pre,
           discount: Number(c.discount) || 0,
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
@@ -2807,7 +2809,20 @@
     if(!item) return false;
     if(item.saleMode === "preorder") return true;
     if(item.saleMode === "stock") return false;
-    return /預購/.test(item.name || "");
+    if(/預購/.test(item.name || "")) return true;
+    // 組合商品：自動模式下，只要原料裡有預購商品，這個組合就當預購（不然原料沒庫存會一直「暫時缺貨」買不到）
+    if(item.autoPreorder) return true;                       // 客人端：老闆存檔時算好帶過來的
+    if(Array.isArray(item.recipe) && item.recipe.length) return comboPreorderInfo(item).pre; // 老闆端
+    return false;
+  }
+  function comboPreorderInfo(c){
+    let pre = false, eta = "";
+    if(!c || !Array.isArray(c.recipe) || !c.recipe.length) return { pre, eta };
+    Object.keys(flattenRecipe(c.recipe, 1, new Set([c.id]))).forEach(pid => {
+      const p = (state.products || []).find(x => x.id === Number(pid));
+      if(p && isPreorder(p)){ pre = true; if(!eta && p.preorderEta) eta = String(p.preorderEta).trim(); }
+    });
+    return { pre, eta };
   }
   function preorderLineText(item){
     const eta = String(item.preorderEta || "").trim();
