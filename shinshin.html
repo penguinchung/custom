@@ -2322,7 +2322,7 @@
     }
     try{
       const { products, composites, ...metaRest } = state;
-      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 2 };
+      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 3 };
       // Firestore 單份文件上限 1MB（以 UTF-8 位元組算，中文一字 3 bytes）。
       // 商品資料＋進出貨／支出紀錄都放在 shop/private，紀錄會一直累積，快滿時提早提醒。
       fbLastPrivBytes = byteSize(privMeta);
@@ -6743,7 +6743,7 @@
             : "已登入老闆模式，雲端同步中。");
           // 雲端公開資料還是舊格式（沒有首頁縮圖）：登入後自動補存一次，之後客人首頁就只載入縮圖
           // 選項用全形逗號打的、剛被自動拆開，也順便存回雲端
-          if(!FB.firstRun && (state._thumbsV !== 2 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
+          if(!FB.firstRun && (state._thumbsV !== 3 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
         } else {
           fbUnsubscribeOrders();
           FB.firstRun = false;
