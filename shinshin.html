@@ -3367,9 +3367,13 @@
     const fee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize, sub);
     document.getElementById("cartSubtotalShow").textContent = "$" + fmt(sub);
     const discount = Math.min(sevenDiscountFor(checkoutMethod, role), sub + fee);
+    // 滿額折抵後，把原價劃掉並標明折了多少，客人才看得出「有扣」
+    const baseFee = checkoutMethod === "takkyu" ? feeTakkyu(checkoutTakkyuSize) : feeSeven();
+    const feeOff = Math.max(0, baseFee - fee);
     document.getElementById("cartShipLabel").textContent = "運費（"
-      + (checkoutMethod === "takkyu" ? "黑貓宅配・" + takkyuSizeLabel(checkoutTakkyuSize) : "7-11 賣貨便") + "）";
-    document.getElementById("cartShipShow").textContent = "$" + fmt(fee);
+      + (checkoutMethod === "takkyu" ? "黑貓宅配・" + takkyuSizeLabel(checkoutTakkyuSize) : "7-11 賣貨便")
+      + (feeOff > 0 ? "・滿額" + (fee === 0 ? "免運" : "折 $" + fmt(feeOff)) : "") + "）";
+    document.getElementById("cartShipShow").innerHTML = (feeOff > 0 ? `<s style="color:var(--ink-soft); font-weight:400;">$${fmt(baseFee)}</s> ` : "") + "$" + fmt(fee);
     document.getElementById("cartDiscountRow").style.display = discount > 0 ? "flex" : "none";
     document.getElementById("cartDiscountShow").textContent = "-$" + fmt(discount);
     const pickupNote = document.getElementById("cartPickupNote");
