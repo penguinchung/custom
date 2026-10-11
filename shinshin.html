@@ -519,6 +519,7 @@
       <div id="cartLines"></div>
       <p class="empty" id="cartEmpty" style="display:none;">購物車還是空的，先去挑幾樣吧。</p>
       <div id="cartTotalBox" style="display:none;">
+        <div id="cartComboHint" style="display:none; background:var(--amber-soft); border-radius:10px; padding:10px 12px; margin:12px 0 4px; font-size:12.5px; line-height:1.7;"></div>
         <div id="cartFreeShipNote" style="display:none; background:var(--primary-soft); border-radius:10px; padding:10px 12px; margin:12px 0 4px; font-size:12.5px; line-height:1.7;"></div>
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span>商品小計</span><span id="cartSubtotalShow">$0</span></div>
         <div class="cart-total-row" style="font-weight:400; font-size:13.5px;"><span id="cartShipLabel">運費</span><span id="cartShipShow">$0</span></div>
@@ -2048,6 +2049,7 @@
           saleMode: c.saleMode || "",
           preorderEta: c.preorderEta || comboPreorderInfo(c).eta || "",
           autoPreorder: comboPreorderInfo(c).pre,
+          parts: comboPartsList(c),
           discount: Number(c.discount) || 0,
           price: Number(c.price) || 0, wholesalePrice: Number(c.wholesalePrice) || 0,
           listed: true, promo: c.promo || null,
@@ -2330,7 +2332,7 @@
     }
     try{
       const { products, composites, ...metaRest } = state;
-      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 4 };
+      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 5 };
       // Firestore 單份文件上限 1MB（以 UTF-8 位元組算，中文一字 3 bytes）。
       // 商品資料＋進出貨／支出紀錄都放在 shop/private，紀錄會一直累積，快滿時提早提醒。
       fbLastPrivBytes = byteSize(privMeta);
@@ -3331,6 +3333,54 @@
     document.getElementById("cartFabCount").textContent = cartCount();
   }
 
+  /* ---- 組合優惠提醒用的資料 ---- */
+  // 配方展開成 [{id, qty}]。只收「單品、整數件、總共 2～12 件」的組合（食材那種小數用量不適用）。
+  function comboPartsList(c){
+    if(!c || !Array.isArray(c.recipe) || !c.recipe.length) return [];
+    const flat = flattenRecipe(c.recipe, 1, new Set([c.id]));
+    const parts = Object.entries(flat).map(([id, q]) => ({ id: Number(id), qty: q }));
+    const total = parts.reduce((s, p) => s + p.qty, 0);
+    if(!parts.length || total < 2 || total > 12) return [];
+    if(parts.some(p => !(p.qty >= 1) || Math.abs(p.qty - Math.round(p.qty)) > 1e-9)) return [];
+    return parts.map(p => ({ id: p.id, qty: Math.round(p.qty) }));
+  }
+  function comboParts(c){ return Array.isArray(c.parts) ? c.parts : comboPartsList(c); }
+  function comboCartSuggestions(lines, role){
+    const have = {};
+    lines.filter(l => l.kind === "product").forEach(l => { have[l.refId] = (have[l.refId] || 0) + l.qty; });
+    if(!Object.keys(have).length) return [];
+    const eff = role === "owner" ? "retail" : role;
+    const out = [];
+    (state.composites || []).filter(c => isListed(c)).forEach(c => {
+      const parts = comboParts(c);
+      if(!parts.length) return;
+      if(!isPreorder(c) && comboBuildable(c) <= 0) return;
+      let singles = 0, names = [];
+      for(const pt of parts){
+        const p = state.products.find(x => x.id === pt.id);
+        if(!p) return;
+        singles += productPriceView(p, eff).price * pt.qty;
+        names.push({ id: pt.id, name: p.name, qty: pt.qty });
+      }
+      const comboPrice = comboPriceView(c, eff).price;
+      const save = Math.round(singles - comboPrice);
+      if(!(comboPrice > 0 && save > 0)) return;
+      const sets = Math.min(...parts.map(pt => Math.floor((have[pt.id] || 0) / pt.qty)));
+      if(sets >= 1){
+        const mine = names.map(n => `${n.name}×${n.qty * sets}`).join("、");
+        out.push({ id: c.id, save: save * sets, html: `✨ 購物車的「${mine}」改買組合「${c.name}」${sets > 1 ? "（" + sets + " 組）" : ""}只要 $${fmt(Math.round(comboPrice * sets))}，比單買省 $${fmt(save * sets)}` });
+        return;
+      }
+      const missing = names.map(n => ({ n, need: Math.max(0, n.qty - (have[n.id] || 0)) })).filter(m => m.need > 0);
+      const touched = parts.some(pt => (have[pt.id] || 0) > 0);
+      const missCount = missing.reduce((s, m) => s + m.need, 0);
+      if(touched && missCount <= 2){
+        out.push({ id: c.id, save, html: `💡 再加 ${missing.map(m => m.n.name + " " + m.need + " 件").join("、")} 就能湊「${c.name}」，組合價 $${fmt(Math.round(comboPrice))}，比單買省 $${fmt(save)}` });
+      }
+    });
+    return out.sort((a, b) => b.save - a.save).slice(0, 3);
+  }
+
   function renderCart(){
     const role = storeViewRole();
     const lines = resolveCart(role);
@@ -3383,6 +3433,18 @@
       row.querySelector("[data-qtyinput]").onchange = e => setCartQty(uid, e.target.value);
       row.querySelector("[data-noteinput]").addEventListener("input", e => setCartNote(uid, e.target.value));
     });
+
+    // 組合優惠提醒：購物車裡的單品剛好湊得成（或差一兩件就湊得成）某個組合時，提醒客人組合比較便宜
+    const comboHint = document.getElementById("cartComboHint");
+    const sugg = comboCartSuggestions(lines, role);
+    if(sugg.length){
+      comboHint.style.display = "block";
+      comboHint.innerHTML = sugg.map(s => `<div style="margin-bottom:6px;">${s.html} <button type="button" class="btn small" data-open-combo="${s.id}">看組合</button></div>`).join("")
+        + `<div class="muted" style="font-size:11.5px;">選好組合加入購物車後，記得把原本的單品數量減掉。</div>`;
+      comboHint.querySelectorAll("[data-open-combo]").forEach(b => b.onclick = () => openDetail("combo", b.dataset.openCombo));
+    } else {
+      comboHint.style.display = "none";
+    }
 
     const sub = cartSubtotal(role);
     const fee = shippingFeeFor(checkoutMethod, checkoutTakkyuSize, sub);
@@ -6774,7 +6836,7 @@
             : "已登入老闆模式，雲端同步中。");
           // 雲端公開資料還是舊格式（沒有首頁縮圖）：登入後自動補存一次，之後客人首頁就只載入縮圖
           // 選項用全形逗號打的、剛被自動拆開，也順便存回雲端
-          if(!FB.firstRun && (state._thumbsV !== 4 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
+          if(!FB.firstRun && (state._thumbsV !== 5 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
         } else {
           fbUnsubscribeOrders();
           FB.firstRun = false;
