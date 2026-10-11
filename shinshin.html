@@ -275,6 +275,14 @@
     border-radius:99px; font-size:12px; font-weight:600; color:var(--ink);
   }
   .opt-pill.active{background:var(--primary); border-color:var(--primary); color:#fff;}
+  .opt-block{margin-top:8px;}
+  .opt-piece-label{font-size:11px; font-weight:700; color:var(--ink-soft); margin-bottom:3px; word-break:break-all;}
+  .opt-selects{display:flex; flex-wrap:wrap; gap:6px;}
+  .opt-sel{display:flex; flex-direction:column; gap:2px; flex:1 1 calc(50% - 6px); min-width:0; font-size:10.5px; font-weight:700; color:var(--ink-soft); margin:0;}
+  .opt-sel select{
+    width:100%; min-width:0; padding:5px 18px 5px 7px; border:1px solid var(--border); background-color:var(--surface);
+    border-radius:8px; font-size:12.5px; font-weight:600; color:var(--ink);
+  }
   .cart-line .opt-summary{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
   .card-combo-badge{
     position:absolute; top:8px; left:8px; background:var(--primary); color:#fff;
@@ -2322,7 +2330,7 @@
     }
     try{
       const { products, composites, ...metaRest } = state;
-      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 3 };
+      const privMeta = { ...metaRest, products: products.map(stripImageFields), composites: composites.map(stripImageFields), orders: [], _savedAt: new Date().toISOString(), _thumbsV: 4 };
       // Firestore 單份文件上限 1MB（以 UTF-8 位元組算，中文一字 3 bytes）。
       // 商品資料＋進出貨／支出紀錄都放在 shop/private，紀錄會一直累積，快滿時提早提醒。
       fbLastPrivBytes = byteSize(privMeta);
@@ -2893,7 +2901,8 @@
       const pieces = Math.round(q);
       for(let i = 1; i <= pieces; i++){
         p.options.forEach(g => {
-          if(g.choices && g.choices.length) groups.push({ name: p.name + (pieces > 1 ? " 第" + i + "件" : "") + " " + g.name, choices: g.choices.slice() });
+          const piece = p.name + (pieces > 1 ? " 第" + i + "件" : "");
+          if(g.choices && g.choices.length) groups.push({ name: piece + " " + g.name, choices: g.choices.slice(), piece, label: g.name });
         });
       }
       p.options.forEach(g => copied.add(g.name + "|" + (g.choices || []).join(",")));
@@ -2930,10 +2939,22 @@
     const opts = effectiveOptions(item);
     if(!opts.length) return "";
     const sel = getSelectedOptions(kind, item.id, item);
-    return opts.map(g => `<div class="opt-group">
-      <div class="opt-group-label">${g.name}</div>
-      <div class="opt-pills">${g.choices.map(c => `<button type="button" class="opt-pill ${sel[g.name]===c?'active':''}" data-opt-pick="${kind}:${item.id}:${encodeURIComponent(g.name)}:${encodeURIComponent(c)}">${c}</button>`).join("")}</div>
-    </div>`).join("");
+    // 下拉選單：同一件單品的顏色、尺寸排在同一列，版面不會因為選項多而拉很長
+    const selectHtml = g => `<label class="opt-sel"><span>${g.label || g.name}</span>`
+      + `<select data-opt-select="${kind}:${item.id}:${encodeURIComponent(g.name)}">`
+      + g.choices.map(c => `<option value="${encodeURIComponent(c)}" ${sel[g.name]===c ? "selected" : ""}>${c}</option>`).join("")
+      + `</select></label>`;
+    const blocks = [], pieceAt = {};
+    opts.forEach(g => {
+      if(g.piece){
+        if(!(g.piece in pieceAt)){ pieceAt[g.piece] = blocks.length; blocks.push({ piece: g.piece, groups: [] }); }
+        blocks[pieceAt[g.piece]].groups.push(g);
+      } else {
+        const last = blocks[blocks.length - 1];
+        if(last && !last.piece) last.groups.push(g); else blocks.push({ piece: "", groups: [g] });
+      }
+    });
+    return blocks.map(b => `<div class="opt-block">${b.piece ? `<div class="opt-piece-label">${b.piece}</div>` : ""}<div class="opt-selects">${b.groups.map(selectHtml).join("")}</div></div>`).join("");
   }
   function optionsText(options){
     const entries = Object.entries(options || {});
@@ -6508,6 +6529,16 @@
         refreshDetailOptionsIfOpen(kind, id);
       }
     });
+    // 選項下拉選單：選了就記起來，並重畫卡片／詳情視窗
+    document.addEventListener("change", e => {
+      const s = e.target.closest && e.target.closest("[data-opt-select]");
+      if(!s) return;
+      const [kind, idStr, nameEnc] = s.dataset.optSelect.split(":");
+      const id = Number(idStr);
+      setSelectedOption(kind, id, decodeURIComponent(nameEnc), decodeURIComponent(s.value));
+      renderStore();
+      refreshDetailOptionsIfOpen(kind, id);
+    });
 
     document.getElementById("galleryPrev").onclick = () => {
       galleryIndex = (galleryIndex - 1 + galleryImages.length) % galleryImages.length;
@@ -6743,7 +6774,7 @@
             : "已登入老闆模式，雲端同步中。");
           // 雲端公開資料還是舊格式（沒有首頁縮圖）：登入後自動補存一次，之後客人首頁就只載入縮圖
           // 選項用全形逗號打的、剛被自動拆開，也順便存回雲端
-          if(!FB.firstRun && (state._thumbsV !== 3 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
+          if(!FB.firstRun && (state._thumbsV !== 4 || optionsSplitFixed)){ optionsSplitFixed = false; fbQueueSave(); }
         } else {
           fbUnsubscribeOrders();
           FB.firstRun = false;
