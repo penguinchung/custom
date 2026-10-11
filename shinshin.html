@@ -2036,7 +2036,7 @@
       composites: (state.composites || []).filter(c => c.listed !== false).map(c => {
         const row = {
           id: c.id, name: c.name, intro: c.intro || "", detailUrl: c.detailUrl || "",
-          options: c.options || [],
+          options: effectiveOptions(c),
           saleMode: c.saleMode || "",
           preorderEta: c.preorderEta || comboPreorderInfo(c).eta || "",
           autoPreorder: comboPreorderInfo(c).pre,
@@ -2878,9 +2878,42 @@
 
   /* 客人目前選的選項（顏色／尺寸…），只存在瀏覽器記憶體，重新整理會重設為第一個選項 */
   let selectedOptions = {};
+  /* 組合商品裡每一件單品如果有自己的選項（顏色／尺寸…），客人要能「每一件各選各的」。
+     做法：把配方裡每個單品（用量是 1～6 的整數）的選項，展開成「單品名 第N件 選項名」這種選項類別，
+     接在組合自己的選項後面。老闆存檔時算好放進公開資料，客人端直接當一般選項顯示，購物車與訂單也沿用。 */
+  function comboSlotInfo(c){
+    const groups = [], copied = new Set();
+    if(!c || !Array.isArray(c.recipe) || !c.recipe.length) return { groups, copied };
+    const flat = flattenRecipe(c.recipe, 1, new Set([c.id]));
+    Object.keys(flat).forEach(pid => {
+      const p = (state.products || []).find(x => x.id === Number(pid));
+      const q = flat[pid];
+      if(!p || !(p.options || []).length) return;
+      if(!(q >= 1 && q <= 6) || Math.abs(q - Math.round(q)) > 1e-9) return;
+      const pieces = Math.round(q);
+      for(let i = 1; i <= pieces; i++){
+        p.options.forEach(g => {
+          if(g.choices && g.choices.length) groups.push({ name: p.name + (pieces > 1 ? " 第" + i + "件" : "") + " " + g.name, choices: g.choices.slice() });
+        });
+      }
+      p.options.forEach(g => copied.add(g.name + "|" + (g.choices || []).join(",")));
+    });
+    return { groups, copied };
+  }
+  function effectiveOptions(item){
+    const own = item.options || [];
+    if(Array.isArray(item.recipe) && item.recipe.length){
+      const { groups, copied } = comboSlotInfo(item);
+      // 老闆以前為了讓客人選顏色，在組合上手動打過跟單品一模一樣的選項 → 展開成逐件選之後就不再重複顯示
+      const keep = own.filter(g => !copied.has(g.name + "|" + (g.choices || []).join(",")));
+      const taken = new Set(keep.map(g => g.name));
+      return keep.concat(groups.filter(g => !taken.has(g.name)));
+    }
+    return own; // 單品、以及客人端的組合（公開資料裡已經展開好了）
+  }
   function defaultSelectedOptions(item){
     const sel = {};
-    (item.options || []).forEach(g => { if(g.choices && g.choices.length) sel[g.name] = g.choices[0]; });
+    effectiveOptions(item).forEach(g => { if(g.choices && g.choices.length) sel[g.name] = g.choices[0]; });
     return sel;
   }
   function getSelectedOptions(kind, id, item){
@@ -2894,9 +2927,10 @@
     selectedOptions[key][groupName] = value;
   }
   function optionPickerHtml(item, kind){
-    if(!item.options || !item.options.length) return "";
+    const opts = effectiveOptions(item);
+    if(!opts.length) return "";
     const sel = getSelectedOptions(kind, item.id, item);
-    return item.options.map(g => `<div class="opt-group">
+    return opts.map(g => `<div class="opt-group">
       <div class="opt-group-label">${g.name}</div>
       <div class="opt-pills">${g.choices.map(c => `<button type="button" class="opt-pill ${sel[g.name]===c?'active':''}" data-opt-pick="${kind}:${item.id}:${encodeURIComponent(g.name)}:${encodeURIComponent(c)}">${c}</button>`).join("")}</div>
     </div>`).join("");
