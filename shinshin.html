@@ -610,6 +610,7 @@
       <div class="panel-head">
         <h2>訂單管理</h2>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn small" id="btnExportOrders" title="匯出下方列表的訂單（會依「狀態」篩選），可存成紀錄">⬇ 匯出訂單</button>
           <button class="btn small" id="btnNewOrder">＋ 手動新增訂單</button>
           <button class="btn small danger-outline" id="btnCancelOverdue">一鍵取消逾期未匯款</button>
         </div>
@@ -3779,6 +3780,52 @@
     URL.revokeObjectURL(a.href);
   }
 
+  /* ---------- 匯出訂單紀錄（Excel；沒有 Excel 程式庫時退回 CSV） ---------- */
+  function exportOrders(){
+    let list = (state.orders || []).slice().sort((a,b) => a.createdAt < b.createdAt ? 1 : -1);
+    if(orderStatusFilter) list = list.filter(o => o.status === orderStatusFilter);
+    if(!list.length){ showToast("目前沒有可匯出的訂單。"); return; }
+    const statusName = { pending:"待匯款", paid:"已匯款", shipped:"已出貨", cancelled:"已取消" };
+    const when = iso => iso ? fmtDateTime(new Date(iso)) : "";
+    const itemText = it => (it.preorder ? "【預購】" : "") + it.name
+      + (optionsText(it.options) ? "（" + optionsText(it.options) + "）" : "")
+      + " ×" + it.qty + " @" + it.unitPrice + (it.note ? "（備註：" + it.note + "）" : "");
+    const head = ["訂單編號","下單時間","姓名","電話","配送方式","取貨門市／收件地址","品項","商品小計","運費","設立賣貨便折抵","應付總額","狀態","匯款期限","已匯款時間","出貨時間","含預購","備註"];
+    const rows = list.map(o => [
+      o.no, when(o.createdAt), o.customerName || "", String(o.phone || ""), methodText(o), o.dest || "",
+      (o.items || []).map(itemText).join("；"),
+      orderSubtotal(o), orderShipping(o), Number(o.discount) || 0, Number(o.total) || 0,
+      statusName[o.status] || o.status, o.status === "pending" ? fmtDateTime(orderDueDate(o)) : "",
+      when(o.paidAt), when(o.shippedAt), o.hasPreorder ? "是" : "", o.note || ""
+    ]);
+    const itemHead = ["訂單編號","下單時間","姓名","品名","選項","數量","單價","小計","預購","品項備註"];
+    const itemRows = [];
+    list.forEach(o => (o.items || []).forEach(it => itemRows.push([
+      o.no, when(o.createdAt), o.customerName || "", it.name, optionsText(it.options), it.qty, it.unitPrice, it.unitPrice * it.qty, it.preorder ? "是" : "", it.note || ""
+    ])));
+    const stamp = todayStr();
+    if(typeof XLSX !== "undefined"){
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([head].concat(rows));
+      ws["!cols"] = [14,17,12,13,12,26,60,10,8,12,10,8,17,17,17,7,24].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws, "訂單");
+      const ws2 = XLSX.utils.aoa_to_sheet([itemHead].concat(itemRows));
+      ws2["!cols"] = [14,17,12,30,22,6,8,8,6,20].map(w => ({ wch: w }));
+      XLSX.utils.book_append_sheet(wb, ws2, "品項明細");
+      XLSX.writeFile(wb, "訂單紀錄_" + stamp + ".xlsx");
+    } else {
+      // 電話前面的 0 會被 Excel 吃掉，所以用 ="…" 讓它維持文字
+      const csv = "﻿" + [head].concat(rows.map(r => r.map((c, i) => i === 3 ? "=\"" + c + "\"" : c)))
+        .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+      a.download = "訂單紀錄_" + stamp + ".csv";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+    showToast("已匯出 " + list.length + " 筆訂單" + (orderStatusFilter ? "（目前篩選：" + (statusName[orderStatusFilter] || "") + "）" : "") + "。");
+  }
+
   /* ---------- render: 訂單管理 (owner) ---------- */
   let orderStatusFilter = "";
   function orderStatusTag(order){
@@ -6370,6 +6417,7 @@
     document.getElementById("orderStatusFilter").onchange = e => { orderStatusFilter = e.target.value; renderOrders(); };
     document.getElementById("shipIncludePending").onchange = renderShipDigest;
     document.getElementById("btnCopy711").onclick = () => copyDigest("711");
+    document.getElementById("btnExportOrders").onclick = exportOrders;
     document.getElementById("btnCsv711").onclick = () => downloadDigestCsv("711");
     document.getElementById("btnCopyTakkyu").onclick = () => copyDigest("takkyu");
     document.getElementById("btnCsvTakkyu").onclick = () => downloadDigestCsv("takkyu");
